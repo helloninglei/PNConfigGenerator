@@ -8,6 +8,7 @@
 #include "../PNConfigLib/ConfigGenerator/ListOfNodesBuilder.h"
 #include "../PNConfigLib/ConfigReader/ConfigReader.h"
 #include "../PNConfigLib/Compiler/Compiler.h"
+#include "../PNConfigLib/Consistency/ConsistencyManager.h"
 #include <QStatusBar>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -181,10 +182,20 @@ void MainWindow::onGenerateConfiguration()
             return;
         }
         
-        // 步骤3: 读取并编译生成最终输出
+        // 步骤3: 验证生成的配置文件
         auto config = PNConfigLib::ConfigReader::parseConfiguration(configPath);
         auto nodes = PNConfigLib::ConfigReader::parseListOfNodes(nodesPath);
         
+        PNConfigLib::ConsistencyManager validator;
+        if (!validator.validateInputs(config, nodes)) {
+            QString errors = validator.getFormattedMessages();
+            QMessageBox::critical(this, "配置验证失败",
+                QString("生成的配置文件验证失败:\n\n%1").arg(errors));
+            statusBar()->showMessage("验证失败", 5000);
+            return;
+        }
+        
+        // 步骤4: 编译生成最终输出
         success = PNConfigLib::Compiler::compile(config, nodes, finalOutputPath);
         
         if (!success) {

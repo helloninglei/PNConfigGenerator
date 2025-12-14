@@ -1,0 +1,2053 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns="http://www.siemens.com/Automation/PNConfigLib/Configuration"
+           targetNamespace="http://www.siemens.com/Automation/PNConfigLib/Configuration"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+	<xs:element name="Configuration"
+	            type="ConfigurationType">
+		<xs:annotation>
+			<xs:documentation>Element to represent a PROFINET configuration.</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Devices">
+		<xs:annotation>
+			<xs:documentation>Element to specify the list of  central and/or decentral device(s) used in the configuration.</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="CentralDevice"
+				            type="CentralDeviceType"
+				            minOccurs="0"
+				            maxOccurs="unbounded">
+					<xs:annotation>
+						<xs:documentation>Element to specify the central device configuration.</xs:documentation>
+					</xs:annotation>
+				</xs:element>
+				<xs:element name="DecentralDevice"
+				            type="DecentralDeviceType"
+				            minOccurs="0"
+				            maxOccurs="unbounded">
+					<xs:annotation>
+						<xs:documentation>Element to specify the decentral device configuration.</xs:documentation>
+					</xs:annotation>
+				</xs:element>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="General"
+	            type="GeneralType">
+		<xs:annotation>
+			<xs:documentation>Element to specify the author, comment, and name properties.</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="ParameterRecordDataItems"
+	            type="ParameterRecordDataItemsType">
+		<xs:annotation>
+			<xs:documentation>Element to represent the configuration of the parameter record data items of a decentral device. A parameter record data item points to a custom parameter record that can be defined in GSDML with the "ParameterRecordDataItem" tag. It contains the manufacturer specific data records of a module/submodule. ParameterRecordDataItem settings are specific to that module/submodule and can have different values and types.</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="Subnet">
+		<xs:annotation>
+			<xs:documentation>Element to specify the network information of the components capable of communication.</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element name="IOSystem"
+				            minOccurs="0"
+				            maxOccurs="unbounded">
+					<xs:annotation>
+						<xs:documentation>Element to represent a PROFINET IO system. To create a PROFINET IO system, you need to have a PROFINET IO controller and at least one PROFINET IO device. There can be maximum of 16 IO systems across all subnets.</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="General"
+							            minOccurs="0">
+								<xs:annotation>
+									<xs:documentation>Element to specify the followings:
+									    &lt;ul&gt;
+									        &lt;li&gt;IO system number&lt;/li&gt;
+										    &lt;li&gt;IO system name&lt;/li&gt;
+										    &lt;li&gt;IO system's additional settings&lt;/li&gt;
+										&lt;/ul&gt;
+									</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:attributeGroup ref="IOSystemGeneralAttributes"/>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:attribute name="IOSystemID"
+						              type="xs:ID"
+						              use="required">
+							<xs:annotation>
+								<xs:documentation>Attribute to identify the IO system.</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+					</xs:complexType>
+				</xs:element>
+				<xs:element name="DomainManagement"
+				            minOccurs="0">
+					<xs:annotation>
+						<xs:documentation>Element for the setting properties of the domain management within the project. This area is divided into the following subareas:
+						    &lt;ul&gt;
+							    &lt;li&gt;Sync domains&lt;/li&gt;
+							    &lt;li&gt;MRP domains&lt;/li&gt;
+							&lt;/ul&gt;
+						</xs:documentation>
+					</xs:annotation>
+					<xs:complexType>
+						<xs:sequence>
+							<xs:element name="SyncDomains"
+							            minOccurs="0">
+								<xs:annotation>
+									<xs:documentation>Element to specify the sync domain(s).</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="SyncDomain"
+										            type="SyncDomainType"
+										            minOccurs="0"
+										            maxOccurs="unbounded">
+											<xs:annotation>
+												<xs:documentation>Element to specify a sync domain. A sync domain is a group of PROFINET devices that are synchronized to a common clock. Exactly one device has the role of the sync master (clock generator); all other devices assume the role of a sync slave. The sync master is usually an IO controller or a switch.</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+							<xs:element name="MrpDomains"
+							            minOccurs="0">
+								<xs:annotation>
+									<xs:documentation>Element to specify the MRP domain(s).</xs:documentation>
+								</xs:annotation>
+								<xs:complexType>
+									<xs:sequence>
+										<xs:element name="MrpDomain"
+										            type="MrpDomainType"
+										            maxOccurs="unbounded">
+											<xs:annotation>
+												<xs:documentation>Element to specify an MRP domain. The Media Redundancy Protocol (MRP) enables redundant networks to be structured. Redundant transmission paths (ring topology) ensure that, if one transmission path fails, an alternative communication path is available. The PROFINET devices that are part of this redundant network form an MRP domain.</xs:documentation>
+											</xs:annotation>
+										</xs:element>
+									</xs:sequence>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+					</xs:complexType>
+				</xs:element>
+			</xs:sequence>
+			<xs:attribute name="SubnetID"
+			              use="required">
+				<xs:annotation>
+					<xs:documentation>Attribute to identify the subnet. Its maximum length is 24.</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:ID">
+						<xs:minLength value="1"/>
+						<xs:maxLength value="24"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:complexType name="CentralAdvancedOptionsType">
+		<xs:annotation>
+			<xs:documentation>Type to represent the setting options of central device's interface and its Ethernet ports, MRP rings, and real-time properties.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="InterfaceOptions"
+			            type="CentralDeviceInterfaceOptionsType"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to specify the interface options of the central device.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:group ref="CommonAdvancedOptionsElements"
+			          minOccurs="0"/>
+			<xs:element name="IsochronousMode"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to represent settings for the isochronous mode of the central device's interface. Objectives of isochronous operation:<br/>With the "Isochronous mode" system property, measured values and process data can be acquired in a fixed system clock. The signal processing up to the switching-through to the "output terminal" occurs within the same system clock. Isochronous mode thus contributes to high-quality control and hence to greater manufacturing precision. With isochronous mode, the possible fluctuations of process response times are drastically reduced. The time-assured processing can be utilized to improve machine cycle times. 	In principle, isochronous mode is worthwhile whenever measured values must be acquired synchronously, movements must be coordinated, and process responses must be defined and simultaneously executed.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:choice>
+						<xs:element name="AutomaticSetting"
+						            default="">
+							<xs:annotation>
+								<xs:documentation>Attribute to enable the automatic setting of the delay time. It is the recommended setting.
+								</xs:documentation>
+							</xs:annotation>
+							<xs:simpleType>
+								<xs:restriction base="xs:string">
+									<xs:maxLength value="0"/>
+								</xs:restriction>
+							</xs:simpleType>
+						</xs:element>
+						<xs:element name="DelayTime"
+						            type="xs:float">
+							<xs:annotation>
+								<xs:documentation>Attribute to specify the delay time in milliseconds.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+					</xs:choice>
+					<xs:attribute name="ApplicationCycle"
+					              type="xs:float">
+						<xs:annotation>
+							<xs:documentation>Attribute to set the interval of the isochronous program (multiple of send cycle) in milliseconds.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="RealTimeSettings"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to represent the real-time settings of a central device. It contains the following configuration properties:
+					    &lt;br/&gt;
+						IO communication:
+						&lt;ul&gt;
+						    &lt;li&gt;Send clock&lt;/li&gt;
+						&lt;/ul&gt;
+						&lt;br/&gt;
+						Synchronization:
+						&lt;ul&gt;
+						    &lt;li&gt;Reference to the sync domain used&lt;/li&gt;
+						    &lt;li&gt;Selection of role in the sync domain&lt;/li&gt;
+						&lt;/ul&gt;
+					</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="IOCommunication"
+						            minOccurs="0">
+							<xs:annotation>
+								<xs:documentation>Element to specify the settings of IO communication between devices in the configuration.</xs:documentation>
+							</xs:annotation>
+							<xs:complexType>
+								<xs:attribute name="SendClock"
+								              type="xs:float">
+									<xs:annotation>
+										<xs:documentation>Attribute to specify the shortest possible update interval for the data exchange in milliseconds. It is the time period between two consecutive intervals for RT communication. The update times are calculated as multiples of the send clock cycle. If the synchronization role is set to "Unsynchronized", the send clock must be set here at the device, otherwise it must be set in the sync domain.</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:complexType>
+						</xs:element>
+						<xs:element name="Synchronization"
+						            minOccurs="0">
+							<xs:annotation>
+								<xs:documentation>Element to specify the central device's sync domain and its sync domain role.</xs:documentation>
+							</xs:annotation>
+							<xs:complexType>
+								<xs:attributeGroup ref="DeviceSynchronizationAttributes"/>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="CentralDeviceEthernetAddressesType">
+		<xs:annotation>
+			<xs:documentation>Type to specify the Ethernet interface settings of the central device. </xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="IPProtocol"
+			            type="CentralIPProtocolType">
+				<xs:annotation>
+					<xs:documentation>Element to represent the IP protocol specific configuration of a PROFINET device. All PROFINET devices work with the TCP/IP protocol and therefore require an IP address for operation on Industrial Ethernet. Once an IP address has been assigned to a device, it can be accessed via this address.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="PROFINETDeviceName"
+			            type="CentralDeviceNameType">
+				<xs:annotation>
+					<xs:documentation>Element to represent the device name configuration of a PROFINET device. Both the central device as well as decentral devices have a device name. Before a decentral device can be addressed by a central device, it must have a device name. This procedure was chosen for PROFINET because names are easier to administer than complex IP addresses. This is the device name that is actually loaded into the device.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+		<xs:attributeGroup ref="SubnetIdentificationAttributes"/>
+	</xs:complexType>
+	<xs:complexType name="CentralDeviceInterfaceOptionsType">
+		<xs:annotation>
+			<xs:documentation>Type to represent the special settings for the Ethernet interface of a central device.</xs:documentation>
+		</xs:annotation>
+		<xs:attributeGroup ref="CentralDeviceInterfaceOptionsAttributes"/>
+	</xs:complexType>
+	<xs:complexType name="CentralDeviceNameType">
+		<xs:annotation>
+			<xs:documentation>Type to represent the setting properties of central device's PROFINET device name.</xs:documentation>
+		</xs:annotation>
+		<xs:group ref="DeviceNameGroup"/>
+	</xs:complexType>
+	<xs:complexType name="CentralDeviceType">
+		<xs:annotation>
+			<xs:documentation>Type to represent a central device configuration.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element ref="General"
+			            minOccurs="0"/>
+			<xs:element name="CentralDeviceInterface">
+				<xs:annotation>
+					<xs:documentation>Element to represent PROFINET interface of the central device.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:group ref="CentralDeviceInterfaceElements"/>
+					<xs:attributeGroup ref="DeviceInterfaceAttributes"/>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="Customization"
+			            type="CustomizationType"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to customize the PROFINET device identifiers.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="Snmp"
+				    type="SnmpType"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to customize Simple Network Management Protocol (SNMP) configuration.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+		<xs:attributeGroup ref="DeviceAttributes"/>
+	</xs:complexType>
+	<xs:complexType name="CentralIPProtocolType">
+		<xs:annotation>
+			<xs:documentation>Group of IP setting options of central device's PROFINET interface.</xs:documentation>
+		</xs:annotation>
+		<xs:choice>
+			<xs:element name="SetInTheProject">
+				<xs:annotation>
+					<xs:documentation>Element to specify the IP Address configuration.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:attributeGroup ref="SetInTheProjectAttributes"/>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="SetDirectlyAtTheDevice"
+			            default="">
+				<xs:annotation>
+					<xs:documentation>Element to indicate that the IP Address of the decentral device is set by other services outside the configuration.</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:maxLength value="0"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+		</xs:choice>
+	</xs:complexType>
+	<xs:complexType name="ConfigurationType">
+		<xs:annotation>
+			<xs:documentation>Type to represent a PROFINET configuration. It includes the list of devices and subnets.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element ref="Devices"/>
+			<xs:element ref="Subnet"
+			            minOccurs="0"
+			            maxOccurs="unbounded"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="ConfigurationAttributes"/>
+	</xs:complexType>
+	<xs:complexType name="CustomizationType">
+		<xs:annotation>
+			<xs:documentation>Type to customize the PROFINET device identifiers; vendor ID, device ID and the article number.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="PNVendorID"
+		              default="42">
+			<xs:annotation>
+				<xs:documentation>Attribute to specify the manufacturer code of device if customization is enabled.</xs:documentation>
+			</xs:annotation>
+			<xs:simpleType>
+				<xs:restriction base="xs:unsignedShort">
+					<xs:minInclusive value="1"/>
+					<xs:maxInclusive value="61439"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+		<xs:attribute name="PNDeviceID"
+		              default="8">
+			<xs:annotation>
+				<xs:documentation>Attribute to specify the PROFINET device code of device if customization is enabled.</xs:documentation>
+			</xs:annotation>
+			<xs:simpleType>
+				<xs:restriction base="xs:unsignedShort">
+					<xs:minInclusive value="1"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="DecentralAdvancedOptionsType">
+		<xs:annotation>
+			<xs:documentation>Type to represent the setting options of decentral device's interface and its Ethernet ports, MRP rings, and real-time properties.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="InterfaceOptions"
+			            type="DecentralDeviceInterfaceOptionsType"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to represent the interface attributes of the decentral device.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:group ref="CommonAdvancedOptionsElements"
+			          minOccurs="0"/>
+			<xs:element name="RealTimeSettings"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to represent the real-time settings of a decentral device. It contains the following configuration properties:
+					    &lt;br/&gt;
+						IO cycle:
+						&lt;ul&gt;
+							&lt;li&gt;Shared Device: Number of central devices with access to this device&lt;/li&gt;
+							&lt;li&gt;Update time&lt;/li&gt;
+							&lt;li&gt;Selection of possible update cycles&lt;/li&gt;
+						&lt;/ul&gt;
+						&lt;br/&gt;
+						Synchronization:
+						&lt;ul&gt;
+							&lt;li&gt;Reference to the sync domain used&lt;/li&gt;
+							&lt;li&gt;Selection of role in the sync domain&lt;/li&gt;
+						&lt;/ul&gt;
+					</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="IOCycle"
+						            minOccurs="0">
+							<xs:annotation>
+								<xs:documentation>Element to specify the IO cycle settings of a decentral device.</xs:documentation>
+							</xs:annotation>
+							<xs:complexType>
+								<xs:complexContent>
+									<xs:extension base="IOCycleType"/>
+								</xs:complexContent>
+							</xs:complexType>
+						</xs:element>
+						<xs:element name="Synchronization"
+						            minOccurs="0">
+							<xs:annotation>
+								<xs:documentation>Element to specify the decentral device's sync domain and its sync domain role.</xs:documentation>
+							</xs:annotation>
+							<xs:complexType>
+								<xs:attributeGroup ref="DeviceSynchronizationAttributes"/>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="DecentralDeviceEthernetAddressesType">
+		<xs:annotation>
+			<xs:documentation>Type to specify the Ethernet interface settings of the decentral device. </xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="IPProtocol"
+			            type="DecentralIPProtocolType">
+				<xs:annotation>
+					<xs:documentation>Element to represent the IP protocol specific configuration of a PROFINET device. All PROFINET devices work with the TCP/IP protocol and therefore require an IP address for operation on Industrial Ethernet. Once an IP address has been assigned to a device, it can be accessed via this address.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="PROFINETDeviceName">
+				<xs:annotation>
+					<xs:documentation>Element to represent the device name configuration of a PROFINET device. Both the central device as well as decentral devices have a device name. Before a decentral device can be addressed by a central device, it must have a device name. This procedure was chosen for PROFINET because names are easier to administer than complex IP addresses. This is the device name that is actually loaded into the device.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:complexContent>
+						<xs:extension base="DecentralDeviceNameType"/>
+					</xs:complexContent>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+		<xs:attributeGroup ref="SubnetIdentificationAttributes"/>
+	</xs:complexType>
+	<xs:complexType name="DecentralDeviceInterfaceOptionsType">
+		<xs:annotation>
+			<xs:documentation>Type to represent the special settings for the Ethernet interface of a decentral device.</xs:documentation>
+		</xs:annotation>
+		<xs:attributeGroup ref="DecentralDeviceInterfaceOptionsAttributes"/>
+	</xs:complexType>
+	<xs:complexType name="DecentralDeviceNameType">
+		<xs:annotation>
+			<xs:documentation>Type to represent the setting properties of decentral device's PROFINET device name.</xs:documentation>
+		</xs:annotation>
+		<xs:choice>
+			<xs:element name="PNDeviceName">
+        <xs:annotation>
+          <xs:documentation>
+              Element to specify a device name. The device must have a device name. This procedure was chosen for PROFINET because names are easier to administer than complex IP addresses. Rules for the name:
+			  &lt;ul&gt;
+                  &lt;li&gt;The name consists of one or more labels, which are separated by a dot [.]. If there is no dot in device name, that means there is just one label.&lt;/li&gt;
+			      &lt;li&gt;Restricted to a total of 240 characters.&lt;/li&gt;
+			      &lt;li&gt;The labels must not exceed 63 characters.&lt;/li&gt;
+			      &lt;li&gt;The device name form n.n.n.n (n = 0, ... 999) is not permitted.&lt;/li&gt;
+			      &lt;li&gt;The device name must not begin with the string "port-xyz" or "port-xyz-abcde" (a, b, c, d, e, x, y, z = 0, ... 9).&lt;/li&gt;
+			  &lt;/ul&gt;
+			  &lt;br/&gt;
+              Example of device names: device-1.machine-1.plant-1.vendor
+			  &lt;br/&gt;
+              The device name is converted to another name internally (i.e., the output of PNConfigLib will be different from the name given here) for at least one of the cases below met:
+              &lt;ul&gt;
+			      &lt;li&gt;The labels beginning without alpha characters&lt;/li&gt;
+			      &lt;li&gt;The labels ending without alphanumeric characters&lt;/li&gt;
+			  &lt;/ul&gt;
+          </xs:documentation>
+        </xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:maxLength value="240"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+		</xs:choice>
+		<xs:attribute name="DeviceNumber"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Device number of the decentral device. Needs to be unique within the IO system.</xs:documentation>
+			</xs:annotation>
+			<xs:simpleType>
+				<xs:restriction base="xs:unsignedInt">
+					<xs:minInclusive value="1"/>
+					<xs:maxInclusive value="2047"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="DecentralDeviceType">
+		<xs:annotation>
+			<xs:documentation>Type to represent a decentral device.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element ref="General"
+			            minOccurs="0"/>
+			<xs:element name="DecentralDeviceInterface">
+				<xs:annotation>
+					<xs:documentation>Element to represent PROFINET interface of the decentral device.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:group ref="DecentralDeviceInterfaceElements"
+					          minOccurs="0"/>
+					<xs:attributeGroup ref="DeviceInterfaceAttributes"/>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="Module"
+			            type="ModuleType"
+			            minOccurs="0"
+			            maxOccurs="unbounded">
+				<xs:annotation>
+					<xs:documentation>Element to represent a module plugged on the decentral device.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="SharedDevice"
+			            type="SharedDeviceType"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to represent a shared device configuration.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element ref="ParameterRecordDataItems"
+			            minOccurs="0"/>
+			<xs:element name="AdvancedConfiguration"
+			            type="AdvancedConfigurationType"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to represent advanced configuration.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+		<xs:attributeGroup ref="DeviceAttributes"/>
+	</xs:complexType>
+	<xs:complexType name="DecentralIPProtocolType">
+		<xs:annotation>
+			<xs:documentation>Type to specify the route and the method with which the IP address of the local interface is obtained and assigned. With the options available here, it is possible to assign IP addresses "dynamically" outside the configuration. The selection you make also decides whether communication connections are set up by the project engineering or via the user program. The following options are available:
+			    &lt;ul&gt;
+				    &lt;li&gt;Set IP address in the project&lt;/li&gt;
+				    &lt;li&gt;Set IP address directly at the device&lt;/li&gt;
+				    &lt;li&gt;Set IP address by the central device&lt;/li&gt;
+				&lt;/ul&gt;
+			</xs:documentation>
+		</xs:annotation>
+		<xs:choice>
+			<xs:element name="SetInTheProject">
+				<xs:annotation>
+					<xs:documentation>Element to specify the IP Address configuration.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:attributeGroup ref="SetInTheProjectAttributes"/>
+					<xs:attribute name="SynchronizeRouterSettingsWithIOController"
+					              type="xs:boolean"
+					              default="true">
+						<xs:annotation>
+							<xs:documentation>Attribute to enable/disable the decentral device's router address synchronization with central device.
+							    &lt;ul&gt;
+							        &lt;li&gt;If it is set to true, the decentral device takes over the setting on the PROFINET interface of the associated central device.&lt;/li&gt;
+								    &lt;li&gt;If it is set to false, you can assign the router address for the decentral device independent of the central device setting (at the configuration, and also in runtime). Then, for example, you can specify an IP address for the router even if you have not set a router address for the interface of the associated central device or when you have already set a router address for a different interface in the central device.&lt;/li&gt;
+								&lt;/ul&gt;
+							</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="SetDirectlyAtTheDevice"
+			            default="">
+				<xs:annotation>
+					<xs:documentation>Element to indicate that the IP Address of the decentral device is set by other services outside the configuration.</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:maxLength value="0"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+			<xs:element name="SetByTheIOController"
+			            default="">
+				<xs:annotation>
+					<xs:documentation>Element to specify that the IP address of the decentral device will be set by the central device during runtime. This element should only be chosen if this is a standard machine project (multiple use IO system must be enabled).</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:maxLength value="0"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+		</xs:choice>
+	</xs:complexType>
+	<xs:complexType name="GeneralType">
+		<xs:annotation>
+			<xs:documentation>Type to specify the author, comment, and name properties of the decentral device.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="Author"
+		              type="xs:string">
+			<xs:annotation>
+				<xs:documentation>Attribute to specify the author of the module's configuration.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="Comment"
+		              type="xs:string">
+			<xs:annotation>
+				<xs:documentation>Attribute to add comments for a module. Each module has a comment field. You can specify the purpose of the module in this field, for example.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="Name"
+		              type="xs:string">
+			<xs:annotation>
+				<xs:documentation>Attribute contains the name of the module.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="IOCycleType">
+		<xs:annotation>
+			<xs:documentation>Type to represent the setting properties for the IO cycle of a decentral device.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="SharedDevicePart"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to represent the configuration for the shared devices. Shared device functionality:<br/>Numerous central devices are often used in larger or widely distributed systems. Without the "Shared device" function, each I/O module of a decentral device is assigned to the same central device. If sensors that are physically close to each other must provide data to different central devices, several decentral devices are required. The "Shared device" function allows the modules or submodules of a decentral device to be divided up among different central devices. Thus allowing flexible automation concepts. You have, for example, the possibility of combining I/O modules lying near other into a decentral device.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:attribute name="IOControllerOutsideProjectWithAccessToThisIODevice"
+					              type="xs:unsignedInt"
+					              default="0">
+						<xs:annotation>
+							<xs:documentation>Attribute to specify the number of central devices outside the configuration with access to this decentral device.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="IODeviceSendClock"
+					              type="xs:float">
+						<xs:annotation>
+							<xs:documentation>Attribute to specify the shortest possible update interval of the decentral device for the data exchange in milliseconds. It is the time period between two consecutive intervals for RT or IRT communication. The update times are calculated as multiples of the send clock cycle. If you configure another central device with access to the decentral device's PDEV, you have to enter the same send clock of the central device here.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="UpdateTime"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to set the update time of the decentral device.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:attribute name="Mode"
+					              default="Automatic">
+						<xs:annotation>
+							<xs:documentation>Attribute to set the calculation mode of the update time.
+							    &lt;ul&gt;
+								    &lt;li&gt;If it is set to automatic; PNConfigLib calculates the optimum update time for the amount of data to be transferred, taking into account configuration and bandwidth limits.&lt;/li&gt;
+								    &lt;li&gt;If it is set to manual; update time must be specified in this configuration.&lt;/li&gt;
+								&lt;/ul&gt;
+							</xs:documentation>
+						</xs:annotation>
+						<xs:simpleType>
+							<xs:restriction base="xs:string">
+								<xs:enumeration value="Automatic"/>
+								<xs:enumeration value="Manual"/>
+							</xs:restriction>
+						</xs:simpleType>
+					</xs:attribute>
+					<xs:attribute name="Value"
+					              type="xs:float">
+						<xs:annotation>
+							<xs:documentation>Possible update time value in milliseconds. Value must be given if Mode is set to Manual.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+		<xs:attribute name="AcceptedUpdateCyclesWithoutIOData"
+		              type="xs:unsignedInt"
+		              default="3">
+			<xs:annotation>
+				<xs:documentation>Attribute to specify the accepted update cycles without IO data. The default setting should only be changed in exceptional cases, for example, during the commissioning phase. When it is changed, the watchdog time is subsequently calculated automatically based on the preset factor. It must not be more than 1.92 seconds. Exceeding the watchdog time results in an error response (decentral device switches the outputs to the safe state).</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="IsochronousModeType">
+		<xs:annotation>
+			<xs:documentation>Type to represent the isochronous mode configuration of the decentral device by providing the following information:
+			    &lt;ul&gt;
+				    &lt;li&gt;The Ti and To values of the time sequence&lt;/li&gt;
+				    &lt;li&gt;The submodules within the decentral device in which the isochronous operation can be activated or deactivated&lt;/li&gt;
+				    &lt;li&gt;Boolean attribute which enables/disables the isochronous mode for the submodule&lt;/li&gt;
+				&lt;/ul&gt;
+			</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="TiToValues"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to represent the setting properties for the Ti (Time for reading in the input data) and To (Time for outputting the output data) values. "Ti" and "To" can be set automatically by PNConfigLib or configured by the user. We recommend allowing PNConfigLib to automatically assign them. The basic time sequence of all components involved in synchronization is explained in the following:
+						&lt;ul&gt;
+							&lt;li&gt;Reading-in of input data in isochronous mode (Ti)&lt;/li&gt;
+							&lt;li&gt;Transport of input data to the central device via the PROFINET subnet&lt;/li&gt;
+							&lt;li&gt;Further processing in the isochronous application of the central device&lt;/li&gt;
+							&lt;li&gt;Transport of output data to the outputting decentral device via the PROFINET subnet&lt;/li&gt;
+							&lt;li&gt;Outputting of output data in isochronous mode (To)&lt;/li&gt;
+						&lt;/ul&gt;
+						&lt;br/&gt;
+						To ensure that all input data is ready for transportation via the PROFINET IO line when the next PROFINET IO cycle begins, the IO read cycle has a lead time "Ti" so that it starts earlier. "Ti" is the "flashbulb" for the inputs; at this instant, all synchronized inputs are read in. "Ti" is necessary in order to compensate for analog-to-digital conversion, backplane bus times, and the like.
+						&lt;br/&gt;
+						To ensure that a consistent status of the outputs can be transferred to the process at the start of the new system clock cycle, the data is output at the time "To" following the last clock beat. The time "To" records the time of the transfer from the IO-controller to the decentral device (through PROFINET IO) for a certain output module and in the decentral device, the transfer of the outputs from the interface module to the electronic module (backplane bus)(if applicable, plus time for the digital-analog conversion). The system makes sure that the values are written simultaneously by setting the "To" of all isochronous output modules to the same value. This value must be greater than or equal to the largest minimal "To" of all isochronous output modules.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:choice>
+						<xs:element name="AutomaticMinimum"
+						            type="xs:string"
+						            default="">
+							<xs:annotation>
+								<xs:documentation>Element to specify that the time values for reading-in of input data (Ti) and outputting of output data (To) in isochronous mode will be assigned to the smallest possible values by PNConfigLib.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:element name="Manual">
+							<xs:annotation>
+								<xs:documentation>Element to manually specify the time values for reading-in of input data (Ti) and outputting of output data (To) in isochronous mode in the configuration.</xs:documentation>
+							</xs:annotation>
+							<xs:complexType>
+								<xs:attribute name="TimeTi"
+								              type="xs:float"
+								              use="required">
+									<xs:annotation>
+										<xs:documentation>Attribute to specify the time value in milliseconds for reading-in of input data in isochronous mode (Ti).</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+								<xs:attribute name="TimeTo"
+								              type="xs:float"
+								              use="required">
+									<xs:annotation>
+										<xs:documentation>Attribute to specify the time value in milliseconds for outputting of output data in isochronous mode (To).</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:complexType>
+						</xs:element>
+					</xs:choice>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="IsochronousSubmodule"
+			            minOccurs="0"
+			            maxOccurs="unbounded">
+				<xs:annotation>
+					<xs:documentation>Element to specify the submodules within the decentral device in which the isochronous operation can be activated or deactivated.  Please note that it is possible to combine isochronous mode distributed I/O with non isochronous mode distributed I/O on one central device.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:attribute name="ModuleRefID"
+					              type="xs:string"
+					              use="required">
+						<xs:annotation>
+							<xs:documentation>Attribute to refer to the module's ID.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="SubmoduleRefID"
+					              type="xs:string"
+					              use="optional">
+						<xs:annotation>
+							<xs:documentation>Attribute to refer to the submodule's ID.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+		<xs:attribute name="IsoModeEnabled"
+		              type="xs:boolean"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to enable/disable the isochronous mode for the submodule.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="ModuleType">
+		<xs:annotation>
+			<xs:documentation>Type to represent a module plugged on a decentral device. A module has the following configurations:
+			    &lt;ul&gt;
+			        &lt;li&gt;ID&lt;/li&gt;
+				    &lt;li&gt;Slot number&lt;/li&gt;
+				    &lt;li&gt;Submodule(s) plugged on&lt;/li&gt;
+				    &lt;li&gt;Input addresses&lt;/li&gt;
+				    &lt;li&gt;Output addresses&lt;/li&gt;
+				    &lt;li&gt;Parameter record data items&lt;/li&gt;
+				&lt;/ul&gt;
+			</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:group ref="ModuleSettings"/>
+			<xs:element name="Submodule"
+			            minOccurs="0"
+			            maxOccurs="unbounded">
+				<xs:annotation>
+					<xs:documentation>Information of the submodules that are used in the device.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence>
+						<xs:group ref="ModuleSettings"/>
+						<xs:element ref="ParameterRecordDataItems"
+						            minOccurs="0"/>
+					</xs:sequence>
+					<xs:attributeGroup ref="SubmoduleAttributes"/>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="Port"
+			            type="PortType"
+			            minOccurs="0"
+			            maxOccurs="unbounded">
+				<xs:annotation>
+					<xs:documentation>Element to represent a port configuration.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element ref="ParameterRecordDataItems"
+			            minOccurs="0"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="ModuleAttributes"/>
+	</xs:complexType>
+	<xs:complexType name="MrpDomainType">
+		<xs:annotation>
+			<xs:documentation>Type to represent an MRP domain which corresponds to a ring at the topology consisting of interface submodules.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="MrpDomainID"
+		              type="xs:ID"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to identify the MRP domain.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="MrpDomainName"
+		              type="xs:string">
+			<xs:annotation>
+				<xs:documentation>Attribute to specify a name to the MRP domain.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="MrpRingType">
+		<xs:annotation>
+			<xs:documentation>Type to represent the setting properties of media redundancy configuration of an interface.	 The MRP process works in conformity with Media Redundancy Protocol (MRP), which is specified in IEC 61158 Type 10 "PROFINET". The reconfiguration time following an interruption of the ring amounts to a maximum of 0.2 seconds. The following rules apply to a ring topology with media redundancy using MRP:
+			    &lt;ul&gt;
+			        &lt;li&gt;All the devices connected within the ring topology are members of the same redundancy domain.&lt;/li&gt;
+				    &lt;li&gt;One device in the ring is acting as redundancy manager.&lt;/li&gt;
+				    &lt;li&gt;All other devices in the ring are redundancy clients.&lt;/li&gt;
+				&lt;/ul&gt;
+				&lt;br/&gt;
+				Requirements for problem-free operation with the MRP media redundancy protocol are as follows:
+				&lt;ul&gt;
+				    &lt;li&gt;MRP is supported in ring topologies with up to 50 devices.&lt;/li&gt;
+				    &lt;li&gt;The ring in which you want to use MRP may only consist of devices that support this function.&lt;/li&gt;
+				    &lt;li&gt;All MRP instances must be interconnected via their ring ports.&lt;/li&gt;
+				    &lt;li&gt;"MRP" must be enabled for all devices in the ring.&lt;/li&gt;
+				    &lt;li&gt;The connection settings (transmission medium / duplex) must be set to full duplex and at least 100 Mbps for all ring ports. Otherwise there may be a loss of data traffic.&lt;/li&gt;
+				&lt;/ul&gt;
+			</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="RingPort"
+			            minOccurs="0"
+			            maxOccurs="2">
+				<xs:annotation>
+					<xs:documentation>Element to set the port that is connected to the ring.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:attribute name="SlotNumber"
+					              type="xs:unsignedShort">
+						<xs:annotation>
+							<xs:documentation>Attribute to specify the slot number of a port.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="PortNumber"
+					              type="xs:unsignedByte"
+					              use="required">
+						<xs:annotation>
+							<xs:documentation>Attribute to specify the number of the port.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+		<xs:attribute name="InstanceNumber">
+			<xs:annotation>
+				<xs:documentation>Attribute to identify the MRP instance within the all MRP instances of a decentral device's PROFINET interface which can be enabled on the device. This attribute shall only be present if the number of MRP instances which can be enabled on the device is greater than 1.</xs:documentation>
+			</xs:annotation>
+			<xs:simpleType>
+				<xs:restriction base="xs:int">
+					<xs:minInclusive value="1"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+		<xs:attribute name="MrpDomainRefID"
+		              type="xs:string"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to refer to the MRP domain in which the instance is participating.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="MrpRole"
+		              type="MrpRole"
+		              default="Not device in the ring">
+			<xs:annotation>
+				<xs:documentation>Attribute to specify the media redundancy role of the device.	 Depending on the device used, the roles "Manager", "Manager (Auto)", "Client" and "Not device in the ring" are available. Rules:
+				    &lt;ul&gt;
+					    &lt;li&gt;A ring must have precisely one device with the role "Manager". No additional devices with the role "Manager" or "Manager (Auto)" are permissible. All the other devices may only have the "Client" role.&lt;/li&gt;
+					    &lt;li&gt;If a ring has no device with the "Manager" role, the ring must at least have a device with the role "Manager (Auto)". Any number of devices with the "Client" role may exist.&lt;/li&gt;
+					&lt;/ul&gt;
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="DiagnosticsInterrupts"
+		              type="xs:boolean"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>Attribute to generate diagnostics interrupts.If it is set to true, the following events or states in the local central device generate a diagnostic interrupt:
+					&lt;ul&gt;
+						&lt;li&gt;Wiring or port error on the ring ports:
+						    &lt;br/&gt;
+							&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;- Connection abort on a ring port.
+							&lt;br/&gt;
+				            &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;- Partner of the ring port does not support MRP.
+							&lt;br/&gt;
+							&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;- Ring port is connected to a non-ring port.
+							&lt;br/&gt;
+				            &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;- Ring port is connected to the ring port of another MRP domain.
+				        &lt;/li&gt;
+						&lt;li&gt;Ring open (interrupted)&lt;/li&gt;
+					&lt;/ul&gt;
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+	<xs:complexType name="ParameterRecordDataItemsType">
+		<xs:annotation>
+			<xs:documentation>Type to represent the parameter record data items of a decentral device. A parameter record data item points to a custom parameter record that can be defined in GSDML with the "ParameterRecordDataItem" tag.  It contains the manufacturer specific data records of a module/submodule. ParameterRecordDataItem settings are specific to that module/submodule and can have different values and types.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="ParameterRecordDataItem"
+			            maxOccurs="unbounded">
+				<xs:annotation>
+					<xs:documentation>Element to specify a parameter record data item of a decentral device. A parameter record data item points to a custom parameter record that can be defined in GSDML with the "ParameterRecordDataItem" tag.  It contains the manufacturer specific data records of a module/submodule. ParameterRecordDataItem settings are specific to that module/submodule and can have different values and types.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence maxOccurs="unbounded">
+						<xs:element name="Ref">
+							<xs:annotation>
+								<xs:documentation>Element to refer to the "Ref" tag of the parameter record data item defined in the GSDML.</xs:documentation>
+							</xs:annotation>
+							<xs:complexType>
+								<xs:attribute name="ByteOffset"
+								              type="xs:unsignedInt"
+								              use="required">
+									<xs:annotation>
+										<xs:documentation>Attribute to refer to the "ByteOffset" defined in the GSDML.</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+								<xs:attribute name="BitOffset">
+									<xs:annotation>
+										<xs:documentation>Attribute to refer to the "BitOffset" defined in the GSDML.</xs:documentation>
+									</xs:annotation>
+									<xs:simpleType>
+										<xs:restriction base="xs:int">
+											<xs:minInclusive value="0"/>
+											<xs:maxInclusive value="7"/>
+										</xs:restriction>
+									</xs:simpleType>
+								</xs:attribute>
+								<xs:attribute name="Value"
+								              type="xs:string"
+								              use="required">
+									<xs:annotation>
+										<xs:documentation>Attribute to set the value of the parameter record data item defined in the GSDML. The value is typed as string and PNConfigLib converts it to the type (bit, byte, int, string, bool etc.) that is defined in the GSDML.</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+					<xs:attribute name="GSDRefIndex"
+					              use="required">
+						<xs:annotation>
+							<xs:documentation>Attribute to refer to the index of the parameter record data item defined in the GSDML.</xs:documentation>
+						</xs:annotation>
+						<xs:simpleType>
+							<xs:restriction base="xs:unsignedShort">
+								<xs:minInclusive value="0"/>
+								<xs:maxInclusive value="49151"/>
+							</xs:restriction>
+						</xs:simpleType>
+						<!--<xsd:simpleType>
+							<xsd:union>
+								<xsd:simpleType>
+									<xsd:restriction base="base:Unsigned16T">
+										<xsd:maxInclusive value="32767"/>
+									</xsd:restriction>
+								</xsd:simpleType>
+								<xsd:simpleType>
+									<xsd:restriction base="base:Unsigned16T">
+										<xsd:minInclusive value="45056"/>
+										<xsd:maxInclusive value="49151"/>										
+									</xsd:restriction>
+								</xsd:simpleType>
+							</xsd:union>
+						</xsd:simpleType>-->
+					</xs:attribute>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="PortType">
+		<xs:annotation>
+			<xs:documentation>Type to represent a port. A port has the following configurations:
+			    &lt;ul&gt;
+			        &lt;li&gt;Port number: The number of the port&lt;/li&gt;
+				    &lt;li&gt;Parameter record data item(s)&lt;/li&gt;
+				&lt;/ul&gt;
+			</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element ref="General"
+			            minOccurs="0"/>
+			<xs:element name="PortOptions"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to specify the setting options for the port.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:attribute name="TransmissionRate"
+					              type="TransmissionRate"
+					              default="Automatic">
+						<xs:annotation>
+							<xs:documentation>Attribute to adjust the transmission value of the port. Depending on the selected device, you can make the following settings for "Transmission rate/duplex":
+							    &lt;ul&gt;
+							        &lt;li&gt;Automatic setting: Recommended default setting of the port. The transmission settings are automatically "negotiated" with the partner port.&lt;/li&gt;
+							        &lt;li&gt;Manual setting: Setting of the transmission rate and the full duplex/half duplex mode. The effectiveness depends on the "Enable autonegotiation" setting.&lt;/li&gt;
+								&lt;/ul&gt;
+						        &lt;br/&gt;
+						        Note: The settings for the local port and partner port must be identical.
+						    </xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="Monitor"
+					              type="xs:boolean"
+					              default="false">
+						<xs:annotation>
+							<xs:documentation>Attribute for enabling/disabling the port diagnostics.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="ActivateThisPortForUse"
+					              type="xs:boolean"
+					              default="true">
+						<xs:annotation>
+							<xs:documentation>Attribute to activate/deactivate the port for use.
+							    &lt;ul&gt;
+							        &lt;li&gt;If it is set to true, the port is activated to be used.&lt;/li&gt;
+								    &lt;li&gt;If it is set to false, any other setting made in the port will be ignored as the port will not be used.&lt;/li&gt;
+								&lt;/ul&gt;
+						        &lt;br/&gt;
+						        If a deactivated port is used as part of the topology, a consistency error will be given.
+							</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="EnableAutonegotiation"
+					              type="xs:boolean"
+					              default="true">
+						<xs:annotation>
+							<xs:documentation>Attribute to enable/disable autonegotiation.
+							    &lt;ul&gt;
+							        &lt;li&gt;If it is set to true, the autonegotiation is enabled. You can use both cross cable and patch cable.&lt;/li&gt;
+								    &lt;li&gt;If it is set to false, the autonegotiation is disabled. Make sure that you use the correct cables (patch or cross cables).&lt;/li&gt;
+								&lt;/ul&gt;
+								&lt;br/&gt;
+								You must make sure the partner port has the same settings because, with this option, the operating parameters of the connected network are not detected and the data transmission rate and transmission mode can therefore not be optimally set.
+							</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attributeGroup ref="Boundaries"/>
+				</xs:complexType>
+			</xs:element>
+			<xs:element ref="ParameterRecordDataItems"
+			            minOccurs="0"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="PortAttributes"/>
+	</xs:complexType>
+	<xs:complexType name="SharedDeviceType">
+		<xs:annotation>
+			<xs:documentation>Type to represent a shared device. It contains central device assignments for each module/submodule of the decentral device.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="AssignedIOController"
+			            minOccurs="0"
+			            maxOccurs="unbounded">
+				<xs:annotation>
+					<xs:documentation>Element to specify the assigned IO controller of a shared device.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="SharedModule"
+						            minOccurs="0"
+						            maxOccurs="unbounded">
+							<xs:annotation>
+								<xs:documentation>Element to specify the assignment of a shared module and its underlying submodule(s).</xs:documentation>
+							</xs:annotation>
+							<xs:complexType>
+								<xs:sequence>
+									<xs:element name="SharedSubmodule"
+									            minOccurs="0"
+									            maxOccurs="unbounded">
+										<xs:annotation>
+											<xs:documentation>Element to specify the assignment of a submodule.</xs:documentation>
+										</xs:annotation>
+										<xs:complexType>
+											<xs:attribute name="SubmoduleRefID"
+											              type="xs:string"
+											              use="required">
+												<xs:annotation>
+													<xs:documentation>Attribute to refer to the submodule of the module.</xs:documentation>
+												</xs:annotation>
+											</xs:attribute>
+										</xs:complexType>
+									</xs:element>
+								</xs:sequence>
+								<xs:attribute name="ModuleRefID"
+								              type="xs:string"
+								              use="required">
+									<xs:annotation>
+										<xs:documentation>Attribute to refer to the module of the decentral device.</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+					<xs:attribute name="IsPDEVShared"
+					              type="xs:boolean"
+					              default="false">
+						<xs:annotation>
+							<xs:documentation>Attribute to control if the shared device's PDEV is shared with the assigned central device. If it is set to true, its interface and ports are shared with the assigned central device.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attributeGroup ref="DeviceAttributes"/>
+					<xs:attributeGroup ref="DeviceInterfaceAttributes"/>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="SyncDomainType">
+		<xs:annotation>
+			<xs:documentation>Type to represent a sync domain.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Details"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to specify the additional settings of the sync domain.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:attributeGroup ref="SyncDomainDetailsAttributes"/>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+		<xs:attributeGroup ref="SyncDomainAttributes"/>
+	</xs:complexType>
+	<xs:complexType name="SnmpType">
+		<xs:annotation>
+			<xs:documentation>Attribute group for the SNMP.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="SNMPEnabled"
+		              type="xs:boolean"
+			      default="false"
+			      use="optional">
+			<xs:annotation>
+				<xs:documentation>Attribute to control how to switch on / off the SNMPv1 support.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SNMPEnableReadOnly"
+		              type="xs:boolean"
+			      default="false"
+		              use="optional">
+			<xs:annotation>
+				<xs:documentation>Attribute to control how to switch on / off Read-only access for SNMP records.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SNMPReadOnlyCommunityName"
+		              type="xs:string"
+			      default="public"
+		              use="optional">
+			<xs:annotation>
+				<xs:documentation>Attribute to use the read only community name that used in SNMPv1 communication protocoll instead of password.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SNMPReadWriteCommunityName"
+		              type="xs:string"
+			      default="private"
+		              use="optional">
+			<xs:annotation>
+				<xs:documentation>Attribute to use the read/write community name that used in SNMPv1 communication protocoll instead of password.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+  <xs:complexType name="DcpType">
+    <xs:annotation>
+      <xs:documentation>Attribute group for the Dcp.</xs:documentation>
+    </xs:annotation>
+    <xs:attribute name="ActivateDcpReadOnly"
+                  type="xs:boolean"
+                  default="false"
+                  use="optional">
+      <xs:annotation>
+        <xs:documentation>Attribute to activate Dcp (discovery and basic configuration protocol) read only.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+	<xs:complexType name="AdvancedConfigurationType">
+		<xs:annotation>
+			<xs:documentation>Element for the Advanced Configuration.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Snmp"
+			            type="SnmpType"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to customize Simple Network Management Protocol (SNMP) configuration.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+      <xs:element name="Dcp"
+                  type="DcpType"
+                  minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Element to customize Dcp (discovery and basic configuration protocol) configuration.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:simpleType name="BandwidthUse">
+		<xs:annotation>
+			<xs:documentation>Type to represent the available bandwidth used for the synchronized controllers, which specifies the Sync-domain bandwidth level. Adherence to the maximum available bandwidth for cyclic IO data is monitored by the system. The bandwidth actually required for cyclic IO data is determined by the system based on the number of configured IO devices and IO modules. Furthermore, the required bandwidth depends on the update time that is used. In general, the calculated bandwidth increases in the following cases:
+                &lt;ul&gt;
+				    &lt;li&gt;There is a large number of IO devices.&lt;/li&gt;
+				    &lt;li&gt;There is a large number of IO modules.&lt;/li&gt;
+				    &lt;li&gt;The update times are shorter.&lt;/li&gt;
+				&lt;/ul&gt;
+			</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="Maximum 25% cyclic IO data. Focus on non cyclic data"/>
+			<xs:enumeration value="Maximum 37,5% cyclic IO data. Focus on non cyclic data"/>
+			<xs:enumeration value="Maximum 50% cyclic IO data. Balanced proportion"/>
+			<xs:enumeration value="Maximum 90% cyclic IO data. Focus on cyclic data"/>
+			<xs:enumeration value="Always 90% cyclic IO data. Focus on cyclic data"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IPv4SubnetMask">
+		<xs:annotation>
+			<xs:documentation>Type to represent Subnet mask based on IPv4 protocol in dot-decimal notation.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="((128|192|224|240|248|252|254)\.0\.0\.0)|(255\.(((0|128|192|224|240|248|252|254)\.0\.0)|(255\.(((0|128|192|224|240|248|252|254)\.0)|255\.(0|128|192|224|240|248|252|254)))))"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="IPv4UnicastAddress">
+		<xs:annotation>
+			<xs:documentation>Type to represent Unicast IP address based on IPv4 protocol in dot-decimal notation.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="MrpRole">
+		<xs:annotation>
+			<xs:documentation>Type to represent the role of the MRP instance. Devices adopt one of the following roles:
+			    &lt;ul&gt;
+				    &lt;li&gt;Not device in the ring (not an alternative delivery path for message packets)&lt;/li&gt;
+				    &lt;li&gt;MrpClient (alternative delivery path for message packets)&lt;/li&gt;
+				    &lt;li&gt;MrpManager/MrpAutoManager (monitors the connection: If a cable error occurs or a device fails, the manager releases an alternative path for the message packets)&lt;/li&gt;
+				&lt;/ul&gt;
+			</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="MrpClient"/>
+			<xs:enumeration value="MrpManager"/>
+			<xs:enumeration value="MrpAutoManager"/>
+			<xs:enumeration value="Not device in the ring"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="SyncRole">
+		<xs:annotation>
+			<xs:documentation>Type to represent the role of the PROFINET device in the sync domain. Devices adopt one of the following roles:
+				&lt;ul&gt;
+				    &lt;li&gt;SyncMaster (sends sync signals at constant time intervals)&lt;/li&gt;
+				    &lt;li&gt;SyncSlave (synchronizes itself with sync signals)&lt;/li&gt;
+				    &lt;li&gt;Unsynchronized (means that the device is not involved in synchronized data exchange)&lt;/li&gt;
+				    &lt;li&gt;RedundantSyncMaster (includes the capability to act as sync master in a non-redundant setup)&lt;/li&gt;
+				&lt;/ul&gt;
+			</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="SyncMaster"/>
+			<xs:enumeration value="SyncSlave"/>
+			<xs:enumeration value="RedundantSyncMaster"/>
+			<xs:enumeration value="Unsynchronized"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="TransmissionRate">
+		<xs:annotation>
+			<xs:documentation>Type to represent the possible settings for transmission rate/duplex.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="TP 10-Mbps Half Duplex"/>
+			<xs:enumeration value="TP 10-Mbps Full Duplex"/>
+			<xs:enumeration value="AsyncFiber 10-Mbps Half Duplex"/>
+			<xs:enumeration value="AsyncFiber 10-Mbps Full Duplex"/>
+			<xs:enumeration value="TP 100-Mbps Half Duplex"/>
+			<xs:enumeration value="TP 100-Mbps Full Duplex"/>
+			<xs:enumeration value="POF/PCF 100-Mbps Full Duplex"/>
+			<xs:enumeration value="FO 100-Mbps Full Duplex"/>
+			<xs:enumeration value="X 1000-Mbps Full Duplex"/>
+			<xs:enumeration value="FO 1000-Mbps Full Duplex"/>
+			<xs:enumeration value="FO 1000-Mbps Full Duplex LD"/>
+			<xs:enumeration value="TP 1000-Mbps Full Duplex"/>
+			<xs:enumeration value="FO 10000-Mbps Full Duplex"/>
+			<xs:enumeration value="FO 100-Mbps Full Duplex LD"/>
+			<xs:enumeration value="Automatic"/>
+		</xs:restriction>
+	</xs:simpleType>
+	<xs:group name="CentralDeviceInterfaceElements">
+		<xs:annotation>
+			<xs:documentation>Group for configuring the central device's interface.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element ref="General"
+			            minOccurs="0"/>
+			<xs:element name="EthernetAddresses"
+			            type="CentralDeviceEthernetAddressesType"
+			            minOccurs="1">
+				<xs:annotation>
+					<xs:documentation>Element to assign addresses and names to PROFINET devices. Moreover, the device's IO system and/or subnet can be referred by their IDs.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="AdvancedOptions"
+			            type="CentralAdvancedOptionsType"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Group to refer to base central device advanced options elements group. This includes the following settings:
+					    &lt;ul&gt;
+					        &lt;li&gt;Interface options such as the reaction of the user program in case of communication errors, if device replacement is possible without exchangeable medium or automatic commissioning, setting regarding IEEE-conform LLDP mode (PROFINET V2.3).&lt;/li&gt;
+						    &lt;li&gt;Port settings include the connection settings (transmission rate/duplex) with the options for monitoring and autonegotiation. You can also set the boundaries for the end of detecting accessible devices, for the end of topology detection and for the end of the sync domain.&lt;/li&gt;
+						    &lt;li&gt;Media redundancy settings, such as the media redundancy role, the ring ports and if diagnostic interrupts are generated in case of redundancy errors.&lt;/li&gt;
+						    &lt;li&gt;Isochronous mode settings such as application cycle, delay time, time lag.&lt;/li&gt;
+						    &lt;li&gt;Real-time settings such as send clock and synchronization properties with a "Domain settings" interface which is the link to the domain settings of the connected subnet (MRP domain and Sync domain).&lt;/li&gt;
+						&lt;/ul&gt;
+					</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+	</xs:group>
+	<xs:group name="CommonAdvancedOptionsElements">
+		<xs:annotation>
+			<xs:documentation>Group of common advanced options of the central device's and decentral device's interface.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="Ports"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to represent the decentral device's Ethernet port(s).</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="Port"
+						            type="PortType"
+						            minOccurs="0"
+						            maxOccurs="unbounded">
+							<xs:annotation>
+								<xs:documentation>Represents and contains information about a port.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="MediaRedundancy"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to represent the media redundancy settings of decentral device.</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="MrpRing"
+						            type="MrpRingType"
+						            minOccurs="0"
+						            maxOccurs="unbounded">
+							<xs:annotation>
+								<xs:documentation>Element to represent an MRP ring.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+	</xs:group>
+	<xs:group name="DecentralDeviceInterfaceElements">
+		<xs:annotation>
+			<xs:documentation>Group for configuring the decentral device's interface.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element ref="General"
+			            minOccurs="0"/>
+			<xs:element name="EthernetAddresses"
+			            type="DecentralDeviceEthernetAddressesType"
+			            minOccurs="1">
+				<xs:annotation>
+					<xs:documentation>Element to assign addresses and names to PROFINET devices. Moreover, the device's IO system and/or subnet can be referred by their IDs.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="AdvancedOptions"
+			            type="DecentralAdvancedOptionsType"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Advanced PROFINET settings of the related interface submodule.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="IsochronousMode"
+			            type="IsochronousModeType"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to respresent settings for the isochronous mode of the decentral device's interface. Objectives of isochronous operation:<br/>With the "Isochronous mode" system property, measured values and process data can be acquired in a fixed system clock. The signal processing up to the switching-through to the "output terminal" occurs within the same system clock. Isochronous mode thus contributes to high-quality control and hence to greater manufacturing precision.<br/>With isochronous mode, the possible fluctuations of process response times are drastically reduced. The time-assured processing can be utilized to improve machine cycle times.<br/>In principle, isochronous mode is worthwhile whenever measured values must be acquired synchronously, movements must be coordinated, and process responses must be defined and simultaneously executed.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element ref="ParameterRecordDataItems"
+			            minOccurs="0"/>
+		</xs:sequence>
+	</xs:group>
+	<xs:group name="DeviceNameGroup">
+		<xs:annotation>
+			<xs:documentation>Group to represent the setting properties of the PROFINET device name.</xs:documentation>
+		</xs:annotation>
+		<xs:choice>
+			<xs:element name="DeviceNameIsSetDirectlyAtTheDevice"
+			            type="xs:boolean"
+			            fixed="true">
+				<xs:annotation>
+					<xs:documentation>Element to control if the device name will be set by other services or not.
+					    &lt;ul&gt;
+						    &lt;li&gt;If it is set to true, the device name is assigned, for example, via user program or an online and diagnostics editor.&lt;/li&gt;
+						    &lt;li&gt;If it is set to false, the device name must be specified in the configuration.&lt;/li&gt;
+						&lt;/ul&gt;
+					</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="PNDeviceName">
+				<xs:annotation>
+					<xs:documentation>Element to specify a device name. Central device must have a device name. This procedure was chosen for PROFINET because names are easier to administer than complex IP addresses. Rules for the name:
+                        &lt;ul&gt;
+						    &lt;li&gt;The name consists of one or more labels, which are separated by a dot [.]. If there is no dot in device name, that means there is just one label.&lt;/li&gt;
+                            &lt;li&gt;Restricted to a total of 240 characters.&lt;/li&gt;
+                            &lt;li&gt;The labels must not exceed 63 characters.&lt;/li&gt;
+                            &lt;li&gt;The device name form n.n.n.n (n = 0, ... 999) is not permitted.&lt;/li&gt;
+                            &lt;li&gt;The device name must not begin with the string "port-xyz" or "port-xyz-abcde" (a, b, c, d, e, x, y, z = 0, ... 9).&lt;/li&gt;
+					    &lt;/ul&gt;
+                        &lt;br/&gt;
+			            Example of device names: device-1.machine-1.plant-1.vendor
+                        &lt;br/&gt;
+			            The device name is converted to another name internally (i.e., the output of PNConfigLib will be different from the name given here) for at least one of the cases below met:
+					    &lt;ul&gt;
+                            &lt;li&gt;The labels beginning without alpha characters&lt;/li&gt;
+                            &lt;li&gt;The labels ending without alphanumeric characters&lt;/li&gt;
+						&lt;/ul&gt;
+                    </xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:maxLength value="240"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:element>
+		</xs:choice>
+	</xs:group>
+	<xs:group name="ModuleSettings">
+		<xs:annotation>
+			<xs:documentation>Group to represent setting properties of a module.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element ref="General"
+			            minOccurs="0"/>
+			<xs:element name="IOAddresses"
+			            minOccurs="0">
+				<xs:annotation>
+					<xs:documentation>Element to represent the input and/or output address(es) of a module. Please note that:
+					    &lt;ul&gt;
+					        &lt;li&gt;If the module has only one virtual submodule with IO addresses, these IO addresses can be configured directly under the module's IO addresses. Alternatively, the virtual submodule can be configured as a submodule.&lt;/li&gt;
+						    &lt;li&gt;If the module has more than one virtual submodules with IO addresses, these virtual submodules must be configured as submodules.&lt;/li&gt;
+						&lt;/ul&gt;
+					</xs:documentation>
+				</xs:annotation>
+				<xs:complexType>
+					<xs:choice minOccurs="0"
+					           maxOccurs="unbounded">
+						<xs:element name="InputAddresses"
+						            minOccurs="0">
+							<xs:annotation>
+								<xs:documentation>Element to represent an input address of a module.</xs:documentation>
+							</xs:annotation>
+							<xs:complexType>
+								<xs:attribute name="StartAddress"
+								              type="xs:unsignedInt"
+								              use="required">
+									<xs:annotation>
+										<xs:documentation>Attribute to specify the start address of the input address range.</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:complexType>
+						</xs:element>
+						<xs:element name="OutputAddresses"
+						            minOccurs="0">
+							<xs:annotation>
+								<xs:documentation>Element to represent an output address of a module.</xs:documentation>
+							</xs:annotation>
+							<xs:complexType>
+								<xs:attribute name="StartAddress"
+								              type="xs:unsignedInt"
+								              use="required">
+									<xs:annotation>
+										<xs:documentation>Attribute to specify the start address of the output address range.</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:complexType>
+						</xs:element>
+					</xs:choice>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+	</xs:group>
+	<xs:attributeGroup name="Boundaries">
+		<xs:annotation>
+			<xs:documentation>Group to represent the boundaries at the port. "Boundaries" are limits for transmission of certain Ethernet frames. The following boundaries can be set at a port:
+				&lt;ul&gt;	
+				    &lt;li&gt;End of detection of accessible devices&lt;/li&gt;
+					&lt;li&gt;End of topology discovery&lt;/li&gt;
+					&lt;li&gt;End of sync domain&lt;/li&gt;
+				&lt;/ul&gt;
+				&lt;br/&gt;
+				The following restrictions must be observed:
+				&lt;ul&gt;
+					&lt;li&gt;The individual boundaries can only be set if the port's interface supports the function in question.&lt;/li&gt;
+				&lt;/ul&gt;
+				&lt;br/&gt;
+				If a partner port has been defined for the port, the following boundaries cannot be set:
+				&lt;ul&gt;
+					&lt;li&gt;End of detection of accessible devices&lt;/li&gt;
+					&lt;li&gt;End of topology discovery&lt;/li&gt;
+				&lt;/ul&gt;
+			</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="EndOfDetectionOfAccessibleDevices"
+		              type="xs:boolean"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>Attribute to enable/disable forwarding of DCP frames for detecting accessible devices.
+				    &lt;ul&gt;
+				        &lt;li&gt;If it is set to true, then the frames for detecting accessible devices are not forwarded at this port.  Devices located behind this port cannot be reached by the central device. The device must have more than one port for this function.&lt;/li&gt;
+					    &lt;li&gt;If it is set to false, forwarding of DCP frames for detecting accessible devices is enabled at this port.&lt;/li&gt;
+					&lt;/ul&gt;
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="EndOfTheSyncDomain"
+		              type="xs:boolean"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>Attribute to enable/disable forwarding of sync frames transmitted for synchronization of devices within a sync domain.
+				    &lt;ul&gt;
+					    &lt;li&gt;If it is set to true,  the sync frames transmitted for synchronization of devices within a sync domain are not forwarded. The device must have more than one port for this function. For example, if you operate a PROFINET device with more than two ports in a ring, you should prevent the sync frames from being fed into the ring by setting a sync boundary (at the ports not inside the ring).  Additional example: If you want to use several sync domains, configure a sync domain boundary for the port connected to a PROFINET device of the other sync domain.&lt;/li&gt;
+					    &lt;li&gt;If it is set to false, the sync frames transmitted for synchronization of devices within a sync domain are forwarded.&lt;/li&gt;
+					&lt;/ul&gt;
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="EndOfTopologyDiscovery"
+		              type="xs:boolean"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>Attribute to enable/disable forwarding of LLDP frames (Link Layer Discovery Protocol) for topology detection.
+				    &lt;ul&gt;
+					    &lt;li&gt;If it is set to true, LLDP frames (Link Layer Discovery Protocol) for topology detection are not sent.&lt;/li&gt;
+					    &lt;li&gt;If it is set to false,  LLDP frames (Link Layer Discovery Protocol) for topology detection are sent.&lt;/li&gt;
+					&lt;/ul&gt;
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="CentralDeviceInterfaceOptionsAttributes">
+		<xs:annotation>
+			<xs:documentation>Group for setting the interface options of the central device.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="PermitOverwritingOfDeviceNamesOfAllAssignedIODevices"
+		              type="xs:boolean"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>Attribute to control the central device's permission to overwrite the PROFINET device names of decentral devices in the IO system. This attribute has dependency on "SupportDeviceReplacementWithoutExchangeableMedium" attribute. If "SupportDeviceReplacementWithoutExchangeableMedium" attribute is set to true, this parameter has a meaning.
+				    &lt;ul&gt;
+				        &lt;li&gt;If it is set to true, the central device can overwrite the PROFINET device names of decentral devices in the IO system.&lt;/li&gt;
+					    &lt;li&gt;If it is set to false, the central device cannot overwrite the device names of the decentral devices. In this case, you must manually assign the PROFINET device name to the decentral device if the PROFINET device name changes in the configuration or when a device is replaced. If automatic commissioning is configured, you must delete the device names of the decentral devices beforehand.&lt;/li&gt;
+					&lt;/ul&gt;
+					&lt;br/&gt;
+					"../IOSystemGroup/MultipleUseIOSystem" XML element can only be operated when this option is enabled. The central device checks prior to overwriting if the type of the decentral device matches the configured type.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="UseIECV2.2LLDPMode"
+		              type="xs:boolean"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>Attribute to control the LLDP mode. LLDP stands for "Link Layer Discovery Protocol"; a manufacturer-independent protocol that is defined in the standard IEEE-802.1AB. Ethernet devices use LLDP to send information about themselves to their neighboring devices in regular intervals. The neighboring devices save this information.
+				    &lt;ul&gt;
+					    &lt;li&gt;If it is set to true for devices which support IEC V2.3 mode, then the PROFINET interface is forced to use IEC V2.2 mode. This may be necessary when you split a system into several dependant projects.&lt;/li&gt;
+					    &lt;li&gt;For the devices which do not support IEC V2.3 mode, the PROFINET interface always uses IEC V2.2 mode. Therefore, this attribute is redundant for these devices.&lt;/li&gt;
+					&lt;/ul&gt;
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SupportDeviceReplacementWithoutExchangeableMedium"
+		              type="xs:boolean"
+		              default="true">
+			<xs:annotation>
+				<xs:documentation>
+					Attribute to enable/disable the replacement of a decentral device without exchangeable medium.
+					&lt;ul&gt;
+					    &lt;li&gt;If it is set to true, device replacement without exchangeable medium is enabled.&lt;/li&gt;
+					    &lt;li&gt;If it is set to false, device replacement without exchangeable medium is disabled.&lt;/li&gt;
+					&lt;/ul&gt;
+					&lt;br/&gt;
+					Generally, a device name is assigned to the decentral devices by either inserting an exchangeable medium or via the programming device. The central device uses this device name to identify the decentral device. Subject to certain conditions, decentral devices can also receive their device names without the insertion of an exchangeable medium (e.g., memory card) or without a programming device. For this purpose, the central device uses Ethernet mechanisms to analyze the relationships between the individual decentral devices and the central device. From these relationships, the central device detects which decentral device was replaced and assigns the configured device name to it.
+					&lt;br/&gt;
+					Requirements:
+					&lt;ul&gt;
+					    &lt;li&gt;A port interconnection is already configured and the topology is referred with its ID in the configuration.&lt;/li&gt;
+					    &lt;li&gt;The affected decentral devices in the automation system must support device replacement without exchangeable medium.&lt;/li&gt;
+					&lt;/ul&gt;
+					&lt;br/&gt;
+					The option "Support device replacement without exchangeable medium" also permits automatic commissioning, which means you can commission the IO system with the decentral devices without assigning their device names in advance. If individual decentral devices in the automation system do not support device replacement without exchangeable medium, a corresponding alarm will be output for the decentral device. It is possible to use the functionality nevertheless. However, all of the following conditions have to be fulfilled:
+					&lt;ul&gt;
+					    &lt;li&gt;The function "Device replacement without exchangeable medium" is activated in the higher-level central device.&lt;/li&gt;
+					    &lt;li&gt;The decentral device supports the LLDP protocol.&lt;/li&gt;
+					    &lt;li&gt;At least one "neighbor" of the decentral device supports
+						    &lt;br/&gt;
+					        &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;- The function "Device replacement without exchangeable medium" as a central device or
+							&lt;br/&gt;
+				            &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;- The LLDP protocol as a decentral device.
+					    &lt;/li&gt;
+					&lt;/ul&gt;
+					&lt;br/&gt;
+					When you configure the environment of the decentral device so that the conditions described above are met for the "Device replacement without exchangeable medium", the usage of the function is possible even if the decentral device itself does not support the functionality.
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="KeepApplicationRelationAtCommunicationError"
+									type="xs:boolean"
+									default="false">
+			<xs:annotation>
+				<xs:documentation>
+					When the attribute is set to TRUE, the PROFINET communication is not broken when the error occurs.
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="ConfigurationAttributes">
+		<xs:annotation>
+			<xs:documentation>Group to represent the following attributes:
+			    &lt;ul&gt;
+			        &lt;li&gt;Configuration ID&lt;/li&gt;
+				    &lt;li&gt;Configuration Name&lt;/li&gt;
+				    &lt;li&gt;Configuration Description&lt;/li&gt;
+				    &lt;li&gt;Reference to the TopologyID (if applicable)&lt;/li&gt;
+				    &lt;li&gt;Reference to the ListofNodesID&lt;/li&gt;
+				    &lt;li&gt;Version&lt;/li&gt;
+				&lt;/ul&gt;
+				&lt;br/&gt;
+				A configuration is uniquely identified within the project by a configuration name and a configuration ID.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="ConfigurationID"
+		              type="xs:ID"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to identify the configuration.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="ConfigurationName"
+		              type="xs:string"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to specify the	name of the configuration. PNConfigLib uses this attribute also as the project name.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="ConfigurationDescription"
+		              type="xs:string">
+			<xs:annotation>
+				<xs:documentation>Attribute to add a description to the configuration. Its purpose is to provide a description within the file itself. Here you can, for example, enter the intended use of the configuration.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="TopologyRefID"
+		              type="xs:string">
+			<xs:annotation>
+				<xs:documentation>Attribute which refers to the ID of the Topology file used in this configuration. If this attribute is not given, the information about how the ports are connected to each other will not be specified.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="ListOfNodesRefID"
+		              type="xs:string"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute which refers to the ID of the ListOfNodes file used in this configuration.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="schemaVersion"
+		              type="xs:string"
+		              use="required"
+		              fixed="1.0">
+			<xs:annotation>
+				<xs:documentation>Attribute for versioning the topology xsd file. It is updated with each XSD revision to ensure there isn’t a mismatch between the project and the used XSD file.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="DecentralDeviceInterfaceOptionsAttributes">
+		<xs:attribute name="OptionalIODevice"
+		              type="xs:boolean"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>Attribute to enable/disable the optional device settings for the device interface.
+				    &lt;ul&gt;
+				        &lt;li&gt;If it is set to true, the decentral device is considered as "optional". Optional decentral devices can be added to the configuration via the user program without generating output XML file again. In addition, the interconnection of the ports of decentral devices and thus the order of the decentral devices can be adapted via the user program.&lt;/li&gt;
+					    &lt;li&gt;If it is set to false, the decentral device is not considered as "optional" and is then a mandatory component of the configuration.&lt;/li&gt;
+					&lt;/ul&gt;
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="PrioritizedStartup"
+		              type="xs:boolean"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>
+					Attribute to enable/disable the prioritized startup function for decentral devices.
+					&lt;ul&gt;
+					    &lt;li&gt;If it is set to true, prioritized startup is activated at the device and the startup executes significantly faster because the system prevents the resources of the central device being exceeded. It can be set to true only in the following cases:
+						    &lt;br/&gt;
+					        &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;- The central device used can prioritize selected decentral devices during startup.
+							&lt;br/&gt;
+					        &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;- The decentral device used supports prioritization.
+					    &lt;/li&gt;
+					    &lt;li&gt;If it is set to false, prioritized startup is deactivated at the device.&lt;/li&gt;
+					&lt;/ul&gt;
+					&lt;br/&gt;
+					Prioritized startup, also known as "fast startup", describes the PROFINET functionality for accelerating the startup of decentral devices in a PROFINET IO system with RT and IRT communication. It reduces the time that the correspondingly configured decentral devices require in order to return to cyclic user data exchange in the following cases:
+					&lt;ul&gt;
+					    &lt;li&gt;After the supply voltage has returned&lt;/li&gt;
+					    &lt;li&gt;After a station has returned&lt;/li&gt;
+					    &lt;li&gt;After decentral devices have been activated&lt;/li&gt;
+					&lt;/ul&gt;
+					&lt;br/&gt;
+					The PROFINET functionality "prioritized startup" enables PROFINET IO applications in which machine parts or tools and their decentral devices have been permanently replaced. Waiting times of several seconds between the scheduled processes of the restart are reduced to a minimum by this optimization. This accelerates the production process with removable decentral devices and enables a greater throughput in production. The PROFINET functionality "prioritized startup" also offers a considerable increase in performance for applications where a quick startup time of the decentral devices after "power on" or after station failure / station return is required or when activating decentral devices.
+					&lt;br/&gt;
+					The length of the startup time of a decentral device (distributed I/O) with the PROFINET function "Prioritized startup" is dependent on the following points:
+					&lt;ul&gt;
+					    &lt;li&gt;decentral devices used (distributed I/O)&lt;/li&gt;
+					    &lt;li&gt;IO structure of the decentral devices (distributed I/O)&lt;/li&gt;
+					    &lt;li&gt;Used modules of the decentral devices (distributed I/O)&lt;/li&gt;
+					    &lt;li&gt;Used central device&lt;/li&gt;
+					    &lt;li&gt;Used switch&lt;/li&gt;
+					    &lt;li&gt;Port setting&lt;/li&gt;
+					    &lt;li&gt;Cabling&lt;/li&gt;
+					    &lt;li&gt;Configured RT class of the decentral device&lt;/li&gt;
+					&lt;/ul&gt;
+					&lt;br/&gt;
+					Note: You can only start up a set maximum number of decentral devices with PROFINET functionality "Prioritized startup" within one IO system. This maximum number depends on the central device used.
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="UseIECV2.2LLDPMode"
+		              type="xs:boolean"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>Attribute to control the LLDP mode type. LLDP stands for "Link Layer Discovery Protocol"; a manufacturer-independent protocol that is defined in the standard IEEE-802.1AB. Ethernet devices use LLDP to send information about themselves to their neighboring devices in regular intervals. The neighboring devices save this information.
+				    &lt;ul&gt;
+					    &lt;li&gt;If it is set to true for devices which support IEC V2.3 mode, then the PROFINET interface is forced to use IEC V2.2 mode. This may be necessary when you split a system into several dependant projects.&lt;/li&gt;
+					    &lt;li&gt;For the devices which do not support IEC V2.3 mode, the PROFINET interface always uses IEC V2.2 mode. Therefore, this attribute is redundant for these devices.&lt;/li&gt;
+					&lt;/ul&gt;
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="DeviceAttributes">
+		<xs:annotation>
+			<xs:documentation>Group to refer to the DeviceID defined in ListOfNodes.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="DeviceRefID"
+		              type="xs:string"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to refer to the DeviceID defined in ListOfNodes.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="DeviceInterfaceAttributes">
+		<xs:annotation>
+			<xs:documentation>Group to refer to the InterfaceID defined in ListOfNodes.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="InterfaceRefID"
+		              type="xs:string"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to refer to the device's interface defined in ListOfNodes.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="DeviceSynchronizationAttributes">
+		<xs:annotation>
+			<xs:documentation>Group for the synchronization properties of an interface.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="SynchronizationRole"
+		              type="SyncRole"
+		              default="Unsynchronized">
+			<xs:annotation>
+				<xs:documentation>Attribute to specify the synchronization role of an interface.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SyncDomainRefID"
+		              type="xs:string">
+			<xs:annotation>
+				<xs:documentation>Attribute to refer to the sync domain in which the interface is participating. If it is a shared device, this attribute shall not be given. A shared device participates to the sync domain of its assigned IO controller.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="IOSystemGeneralAttributes">
+		<xs:annotation>
+			<xs:documentation>Attribute group of the general attributes of the IO system.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="MultipleUseIOSystem"
+		              type="xs:boolean"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>Attribute to turn the project into a "standard machine project". This setting triggers various settings and checks of the configuration. This turns the IO system into a self-contained system and dependencies to other components outside the IO system are avoided.  Therefore, the IO system can be used multiple times at the same subnet without changing the engineering project. This element can only be operated when "../CentralDeviceInterfaceOptionsType/PermitOverwritingOfDeviceNamesOfAllAssignedIODevices" attribute is set to TRUE.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="IOSystemNumber">
+			<xs:annotation>
+				<xs:documentation>Attribute to assign a number to the IO system. Values between 100 and 115 are permitted.</xs:documentation>
+			</xs:annotation>
+			<xs:simpleType>
+				<xs:restriction base="xs:unsignedShort">
+					<xs:minInclusive value="100"/>
+					<xs:maxInclusive value="115"/>
+				</xs:restriction>
+			</xs:simpleType>
+		</xs:attribute>
+		<xs:attribute name="IOSystemName"
+		              type="xs:string">
+			<xs:annotation>
+				<xs:documentation>Attribute to specify a name to the IO system. If not provided, IOSystemID will be used as the name.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="ModuleAttributes">
+		<xs:annotation>
+			<xs:documentation>Group to represent the identifiers of a module.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="ModuleID"
+		              type="xs:string"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to identify a module.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SlotNumber"
+		              type="xs:unsignedShort"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to define the slot number of a module.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="GSDRefID"
+		              type="xs:string"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to refer to the ID defined in the GSDML.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="PortAttributes">
+		<xs:annotation>
+			<xs:documentation>Group to represent the identifiers of a port.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="PortNumber"
+		              type="xs:unsignedByte"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to define the number of the port.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="GSDRefID"
+		              type="xs:string"
+		              use="optional">
+			<xs:annotation>
+				<xs:documentation>Attribute to refer to the ID defined in the GSDML.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SubslotNumber"
+		              type="xs:unsignedShort"
+		              use="optional">
+			<xs:annotation>
+				<xs:documentation>Attribute to define the subslot number of a port.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="SetInTheProjectAttributes">
+		<xs:annotation>
+			<xs:documentation>Group for setting the IP Address in the project.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="RouterAddress"
+		              type="IPv4UnicastAddress"
+		              default="0.0.0.0">
+			<xs:annotation>
+				<xs:documentation>Attribute to represent the IP address of the Default-Gateway.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="IPAddress"
+		              type="IPv4UnicastAddress"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to represent the IP Address of an Ethernet interface. An address can only be used once in a subnet.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SubnetMask"
+		              type="IPv4SubnetMask"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to represent the IP-Subnet mask of an Ethernet interface. It defines the limits of an IP subnet.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="SubmoduleAttributes">
+		<xs:annotation>
+			<xs:documentation>Group to represent the identifiers of a submodule.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="SubmoduleID"
+		              type="xs:string"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to identify a submodule.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SubslotNumber"
+		              type="xs:unsignedShort"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to define the subslot number of a submodule.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="GSDRefID"
+		              type="xs:string"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to refer to the ID defined in the GSDML.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="SubnetIdentificationAttributes">
+		<xs:annotation>
+			<xs:documentation>Group to refer to the IOSystemID and SubnetID defined in Configuration.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="IOSystemRefID"
+		              type="xs:string">
+			<xs:annotation>
+				<xs:documentation>Attribute to refer to device's IO system via its ID. If it is a shared device interface, this attribute shall not be set.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SubnetRefID"
+		              type="xs:string">
+			<xs:annotation>
+				<xs:documentation>Attribute to refer to device's subnet via its ID. If it is not given or if it contains an empty string, PNConfigLib looks for a subnet in the configuration. If there isn't any subnet defined in the configuration, then PNConfiglib creates a default subnet and adds all the devices defined in the configuration to this default subnet. Please note that a device that is not connected to a subnet cannot be part of an IO system or a domain.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="SyncDomainAttributes">
+		<xs:annotation>
+			<xs:documentation>Attribute group of the general attributes of the sync domain.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="SyncDomainID"
+		              type="xs:ID"
+		              use="required">
+			<xs:annotation>
+				<xs:documentation>Attribute to identify the sync domain.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SyncDomainName"
+		              type="xs:string">
+			<xs:annotation>
+				<xs:documentation>Attribute to specify a name for the sync domain.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="SendClock"
+		              type="xs:float">
+			<xs:annotation>
+				<xs:documentation>Attribute to specify the shortest possible update interval of the data exchange in milliseconds. It is the time period between two consecutive intervals for IRT communication. The update times are calculated as multiples of the send clock cycle. When IRT is configured within the sync domain, the send clock must be set here.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="PermitUsageOfFastForwarding"
+		              type="xs:boolean"
+		              use="optional"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>Attribute to allow the usage of fast forwarding at this sync domain.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="ActivateHighPerformance"
+		              type="xs:boolean"
+		              use="optional"
+		              default="false">
+			<xs:annotation>
+				<xs:documentation>Attribute to speed up the data exchange via PROFINET.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+	<xs:attributeGroup name="SyncDomainDetailsAttributes">
+		<xs:annotation>
+			<xs:documentation>Attribute group for the sync domain details.</xs:documentation>
+		</xs:annotation>
+		<xs:attribute name="BandwidthUse"
+		              type="BandwidthUse"
+		              default="Maximum 50% cyclic IO data. Balanced proportion">
+			<xs:annotation>
+				<xs:documentation>Attribute to set the bandwidth use for the synchronized controller, which specifies the Sync-domain bandwidth level. Adherence to the maximum available bandwidth for cyclic IO data is monitored by the system. The maximum bandwidth depends on the send clock cycle. The bandwidth actually required for cyclic IO data is determined by the system based on the number of configured IO devices and IO modules. Furthermore, the required bandwidth depends on the update time that is used. In general, the calculated bandwidth increases in the following cases:
+					&lt;ul&gt;
+					    &lt;li&gt;There is a large number of IO devices&lt;/li&gt;
+					    &lt;li&gt;There is a large number of IO modules&lt;/li&gt;
+					    &lt;li&gt;The update times are shorter&lt;/li&gt;
+					&lt;/ul&gt;
+				</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:attributeGroup>
+</xs:schema>

@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns="http://www.siemens.com/Automation/PNConfigLib/ListOfNodes"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://www.siemens.com/Automation/PNConfigLib/ListOfNodes"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+    <xs:element name="ListOfNodes">
+        <xs:annotation>
+            <xs:documentation>Element to represent the list of nodes. A node represents a PROFINET controller or a decentral device which will be configured in the “Configuration” file. The user should present here all the nodes with their identifiers.</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="PNDriver"
+                            type="PNDriverType"
+                            minOccurs="1"
+                            maxOccurs="unbounded">
+                    <xs:annotation>
+                        <xs:documentation>Element to represent PROFINET controller node.</xs:documentation>
+                    </xs:annotation>
+                </xs:element>
+                <xs:element name="DecentralDevice"
+                            type="DecentralDeviceType"
+                            minOccurs="0"
+                            maxOccurs="unbounded">
+                    <xs:annotation>
+                        <xs:documentation>Element to represent a decentral device node.</xs:documentation>
+                    </xs:annotation>
+                </xs:element>
+            </xs:sequence>
+            <xs:attribute name="ListOfNodesID"
+                          type="xs:ID"
+                          use="required">
+                <xs:annotation>
+                    <xs:documentation>Attribute to identify the list of nodes. This identifier is referred in the configuration and topology (if applicable) files to point at which ListOfNodes file is used for the project.</xs:documentation>
+                </xs:annotation>
+            </xs:attribute>
+            <xs:attribute name="schemaVersion"
+                          type="xs:string"
+                          use="required"
+                          fixed="1.0">
+                <xs:annotation>
+                    <xs:documentation>Attribute for versioning the list of nodes xsd file. It is updated with each XSD revision to ensure there isn’t a mismatch between the project and the used XSD file.</xs:documentation>
+                </xs:annotation>
+            </xs:attribute>
+        </xs:complexType>
+    </xs:element>
+    <xs:complexType name="PNDriverType">
+        <xs:annotation>
+            <xs:documentation>Type to represent a PROFINET controller node.</xs:documentation>
+        </xs:annotation>
+        <xs:sequence>
+            <xs:element name="Interface"
+                        type="PNDriverInterfaceType">
+                <xs:annotation>
+                    <xs:documentation>Element to represent a PROFINET interface of a PROFINET controller.</xs:documentation>
+                </xs:annotation>
+            </xs:element>
+        </xs:sequence>
+        <xs:attributeGroup ref="BaseDeviceAttributes"/>
+        <xs:attribute name="DeviceName"
+                      type="xs:string"
+                      use="optional">
+            <xs:annotation>
+                <xs:documentation>Attribute to assign a name for PROFINET controller. If it is not provided, the DeviceID will be used as PROFINET controller's name.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="DeviceVersion"
+                      type="xs:string"
+                      use="optional">
+            <xs:annotation>
+                <xs:documentation>Attribute to specify the version of PROFINET controller. This attribute is required if "InterfaceType" attribute has a value other than "Custom". The following PN Driver versions are defined in the product:
+                    &lt;ul&gt;
+                        &lt;li&gt;V2.1&lt;/li&gt;
+                        &lt;li&gt;V2.2&lt;/li&gt;
+						&lt;li&gt;V3.1&lt;/li&gt;
+                    &lt;/ul&gt;
+                    &lt;br/&gt;
+                    This attribute is optional if "InterfaceType" attribute's value is set to "Custom", and user can assign any version that is in the list above.
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+    </xs:complexType>
+    <xs:complexType name="PNDriverInterfaceType">
+        <xs:annotation>
+            <xs:documentation>Type to represent a PROFINET interface of a PROFINET controller.</xs:documentation>
+        </xs:annotation>
+        <xs:attributeGroup ref="BaseInterfaceAttributes"/>
+        <xs:attribute name="InterfaceType"
+                      type="PNDriverInterfaceEnum"
+                      use="required">
+            <xs:annotation>
+                <xs:documentation>Attribute to specify PROFINET controller's interface type. The following PN Driver variants are already defined in the product:
+                    &lt;ul&gt;   
+                        &lt;li&gt;V2.1 Windows&lt;/li&gt;
+                        &lt;li&gt;V2.1 Linux&lt;/li&gt;
+                        &lt;li&gt;V2.1 CP1625 Stand-alone&lt;/li&gt;
+                        &lt;li&gt;V2.1 CP1625 Host&lt;/li&gt;
+                        &lt;li&gt;V2.1 IOT20x0&lt;/li&gt;
+                        &lt;li&gt;V2.2 Windows&lt;/li&gt;
+                        &lt;li&gt;V2.2 Linux&lt;/li&gt;
+                        &lt;li&gt;V2.2 CP1625 Stand-alone&lt;/li&gt;
+                        &lt;li&gt;V2.2 CP1625 Host&lt;/li&gt;
+                        &lt;li&gt;V2.2 IOT20x0&lt;/li&gt;
+                        &lt;li&gt;V2.2 Linux Native&lt;/li&gt;
+						&lt;li&gt;V3.1 Windows&lt;/li&gt;
+                        &lt;li&gt;V3.1 CP1625 Host&lt;/li&gt;
+                        &lt;li&gt;V3.1 Linux Native&lt;/li&gt;
+                    &lt;/ul&gt;
+                    &lt;br/&gt;
+                    If the user has her/his own PROFINET controller, the user has to select "Custom" as a type.
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="CustomInterfacePath"
+                      type="xs:anyURI"
+                      use="optional">
+        <xs:annotation>
+          <xs:documentation>
+            Attribute to specify custom PROFINET controller's location.
+          </xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+    <xs:simpleType name="PNDriverInterfaceEnum">
+        <xs:annotation>
+            <xs:documentation>Type to represent PROFINET interface variant of PROFINET controller.</xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="CP1625Stand-alone"/>
+            <xs:enumeration value="CP1625Host"/>
+            <xs:enumeration value="Linux"/>
+            <xs:enumeration value="Linux Native"/>
+            <xs:enumeration value="IoT20x0"/>
+            <xs:enumeration value="Windows"/>
+            <xs:enumeration value="Custom"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="DecentralDeviceType">
+        <xs:annotation>
+            <xs:documentation>Type to represent a decentral device node.</xs:documentation>
+        </xs:annotation>
+        <xs:sequence>
+            <xs:element name="Interface"
+                        type="DecentralDeviceInterfaceType">
+                <xs:annotation>
+                    <xs:documentation>Element to represent the PROFINET interface of a decentral device.</xs:documentation>
+                </xs:annotation>
+            </xs:element>
+        </xs:sequence>
+        <xs:attributeGroup ref="BaseDeviceAttributes"/>
+        <xs:attribute name="GSDPath"
+                      type="xs:anyURI"
+                      use="required">
+            <xs:annotation>
+                <xs:documentation>Attribute to specify the path of the GSDML file that contains the decentral device. Can be an absolute path, or relative to the working directory.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="GSDRefID"
+                      type="xs:string"
+                      use="required">
+            <xs:annotation>
+                <xs:documentation>Attribute to refer to the ID of the DeviceAccessPointItem which contains the decentral device's description defined in the GSDML file.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="DeviceName"
+                      type="xs:string"
+                      use="optional">
+            <xs:annotation>
+                <xs:documentation>Attribute to assign a name for the decentral device. If it is not provided, the DeviceID will be used as the decentral device's name.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+    </xs:complexType>
+    <xs:complexType name="DecentralDeviceInterfaceType">
+        <xs:annotation>
+            <xs:documentation>Type to represent the PROFINET interface of a decentral device.</xs:documentation>
+        </xs:annotation>
+        <xs:attributeGroup ref="BaseInterfaceAttributes"/>
+    </xs:complexType>
+    <xs:attributeGroup name="BaseDeviceAttributes">
+        <xs:annotation>
+            <xs:documentation>Group of identifier attributes.</xs:documentation>
+        </xs:annotation>
+        <xs:attribute name="DeviceID"
+                      type="xs:ID"
+                      use="required">
+            <xs:annotation>
+                <xs:documentation>Attribute to identify a decentral device. This attribute is used in Configuration and Topology (if applicable) to point to the device which is is being used from ListOfNodes.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+    </xs:attributeGroup>
+    <xs:attributeGroup name="BaseInterfaceAttributes">
+        <xs:annotation>
+            <xs:documentation>Group of PROFINET interface attributes.</xs:documentation>
+        </xs:annotation>
+        <xs:attribute name="InterfaceID"
+                      type="xs:ID"
+                      use="required">
+            <xs:annotation>
+                <xs:documentation>Attribute to identify a PROFINET interface. This attribute is used in Configuration and Topology (if applicable) to point to the interface of a device which is being used from ListOfNodes.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="InterfaceName"
+                      type="xs:string">
+            <xs:annotation>
+                <xs:documentation>Attribute to assign a name for the PROFINET interface. If it is not provided, the InterfaceID will be used as the interface's name.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+    </xs:attributeGroup>
+</xs:schema>

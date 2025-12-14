@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns="http://www.siemens.com/Automation/PNConfigLib/ControllerVariant"
+           targetNamespace="http://www.siemens.com/Automation/PNConfigLib/ControllerVariant"
+           attributeFormDefault="unqualified"
+           elementFormDefault="qualified">
+  <xs:element name="CentralDeviceCatalogObject">
+    <xs:annotation>
+      <xs:documentation>Element to specify children and PROFINET attributes of the central device.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="AttributeLookup"
+                    type="AttributeLookupType"
+                    minOccurs="1"
+                    maxOccurs ="1">
+          <xs:annotation>
+            <xs:documentation>PROFINET attribute lookup of CentralDeviceCatalogObject.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="InterfaceCatalogItems"
+                    type="InterfaceCatalogItemsType"
+                    minOccurs="1"
+                    maxOccurs ="1">
+          <xs:annotation>
+            <xs:documentation>Element to represent interface catalog items.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+         
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:complexType name="InterfaceCatalogItemsType">
+    <xs:annotation>
+      <xs:documentation>Element to represent interface catalog items.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="InterfaceCatalogItem"
+                  minOccurs="1"
+                  maxOccurs ="1">
+        <xs:annotation>
+          <xs:documentation>Element to represent PROFINET interface attributes and children of the central device.</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="AttributeLookup"
+                        type="AttributeLookupType"
+                        minOccurs="1"
+                        maxOccurs ="1">
+              <xs:annotation>
+                <xs:documentation>PROFINET attribute lookup of InterfaceCatalogItem.</xs:documentation>
+              </xs:annotation>
+            </xs:element>
+            <xs:element name="PortCatalogItems"
+                        type="PortCatalogItemsType"
+                        minOccurs="1"
+                        maxOccurs ="1">
+              <xs:annotation>
+                <xs:documentation>Element to represent port catalog items of the interface catalog item.</xs:documentation>
+              </xs:annotation>
+            </xs:element>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="PortCatalogItemsType">
+    <xs:annotation>
+      <xs:documentation>Element to represent port catalog items of the interface catalog item.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="PortCatalogItem"
+                  minOccurs="1"
+                  maxOccurs="unbounded">
+        <xs:annotation>
+          <xs:documentation>Element to represent PROFINET attributes of port.</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="AttributeLookup"
+                        type="AttributeLookupType"
+                        minOccurs="1"
+                        maxOccurs ="1">
+              <xs:annotation>
+                <xs:documentation>PROFINET attribute lookup of PortCatalogItem.</xs:documentation>
+              </xs:annotation>
+            </xs:element>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="AttributeLookupType">
+    <xs:annotation>
+      <xs:documentation>PROFINET attribute lookup of the parent object.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="CatalogAttribute"
+                  maxOccurs="unbounded"
+                  minOccurs="1">
+        <xs:annotation>
+          <xs:documentation>PROFINET attribute of the catalog item.</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Value">
+              <xs:annotation>
+                <xs:documentation>Value of the attribute.</xs:documentation>
+              </xs:annotation>
+            </xs:element>
+          </xs:sequence>
+          <xs:attribute type="xs:string"
+                        name="Key"
+                        use="required">
+            <xs:annotation>
+              <xs:documentation>Key of the attribute.</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="Enumerated">
+    <xs:annotation>
+      <xs:documentation>An object that collects a list, a selected value from this list and a default value.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="List"
+                  minOccurs="1"
+                  maxOccurs ="1">
+        <xs:annotation>
+          <xs:documentation>A list that collects generic type objects.</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="anyType"
+                        maxOccurs="unbounded"
+                        minOccurs="1">
+              <xs:annotation>
+                <xs:documentation>A list member with generic type.</xs:documentation>
+              </xs:annotation>
+            </xs:element>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="DefaultValue"
+                  minOccurs="0"
+                  maxOccurs ="1">
+        <xs:annotation>
+          <xs:documentation>Default value of the current list element.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="Value"
+                  minOccurs="0"
+                  maxOccurs ="1">
+        <xs:annotation>
+          <xs:documentation>Selected value of the current list element.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>

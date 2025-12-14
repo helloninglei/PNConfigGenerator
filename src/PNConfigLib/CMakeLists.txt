@@ -39,6 +39,14 @@ add_library(PNConfigLib STATIC
     # Project Manager (stub)
     ProjectManager/ProjectManager.h
     ProjectManager/ProjectManager.cpp
+    
+    # Consistency Validation
+    Consistency/ConsistencyLogger.h
+    Consistency/ConsistencyLogger.cpp
+    Consistency/InputValidator.h
+    Consistency/InputValidator.cpp
+    Consistency/ConsistencyManager.h
+    Consistency/ConsistencyManager.cpp
 )
 
 target_link_libraries(PNConfigLib

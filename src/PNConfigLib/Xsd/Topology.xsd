@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns="http://www.siemens.com/Automation/PNConfigLib/Topology"
+           targetNamespace="http://www.siemens.com/Automation/PNConfigLib/Topology"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+    <xs:element name="Topology"
+                type="TopologyType">
+        <xs:annotation>
+            <xs:documentation>Element to represent the Ethernet topology configuration of the project. </xs:documentation>
+        </xs:annotation>
+    </xs:element>
+    <xs:simpleType name="CableLength">
+        <xs:annotation>
+            <xs:documentation>Type to represent the possible lengths of the connecting cable to the partner port in meters.</xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="max20m"/>
+            <xs:enumeration value="max50m"/>
+            <xs:enumeration value="max100m"/>
+            <xs:enumeration value="max500m"/>
+            <xs:enumeration value="max1000m"/>
+            <xs:enumeration value="max3000m"/>
+            <xs:enumeration value="Not Specified"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="FiberOpticType">
+        <xs:annotation>
+            <xs:documentation>Type to represent the possible fiber optic cable types. The cable identifier cannot be selected for copper but can be selected for fiber optic (FO).</xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="FO standard cable GP (50 µm)"/>
+            <xs:enumeration value="FO trailing cable / GP"/>
+            <xs:enumeration value="FO ground cable"/>
+            <xs:enumeration value="FO standard cable (62.5 µm)"/>
+            <xs:enumeration value="Flexible FO cable"/>
+            <xs:enumeration value="POF standard cable GP"/>
+            <xs:enumeration value="POF trailing cable"/>
+            <xs:enumeration value="PCF standard cable GP"/>
+            <xs:enumeration value="PCF trailing cable / GP"/>
+            <xs:enumeration value="GI-PCF standard cable"/>
+            <xs:enumeration value="GI-PCF trailing cable"/>
+            <xs:enumeration value="Not Specified"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:attributeGroup name="PortAttributes">
+        <xs:annotation>
+            <xs:documentation>Group of following port attributes:
+                &lt;ul&gt;
+                    &lt;li&gt;Reference to the device ID&lt;/li&gt;
+                    &lt;li&gt;Reference to the interface ID&lt;/li&gt;
+                    &lt;li&gt;Port number&lt;/li&gt;
+                    &lt;li&gt;Slot number&lt;/li&gt;
+                    &lt;li&gt;Cable type&lt;/li&gt;
+                &lt;/ul&gt;
+            </xs:documentation>
+        </xs:annotation>
+        <xs:attribute name="DeviceRefID"
+                      type="xs:string"
+                      use="required">
+            <xs:annotation>
+                <xs:documentation>Attribute to refer to the device defined in ListOfNodes.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="InterfaceRefID"
+                      type="xs:string"
+                      use="required">
+            <xs:annotation>
+                <xs:documentation>Attribute to refer to the device's interface defined in ListOfNodes.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="PortNumber"
+                      type="xs:unsignedByte"
+                      use="required">
+            <xs:annotation>
+                <xs:documentation>Attribute to specify the number of the port. Since ports do not have IDs, they are identified by the combination of their DeviceID, InterfaceID and port number. If it is a pluggable port of a module, then the slot number is  also combined with these identifiers.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="SlotNumber"
+                      type="xs:unsignedShort">
+            <xs:annotation>
+                <xs:documentation>Attribute to specify the number of the slot into which the port is inserted.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="CableType"
+                      type="FiberOpticType"
+                      default="Not Specified">
+            <xs:annotation>
+                <xs:documentation>Element to specify the fiber optic cable types. The cable identifier shouldn't be selected for copper but can be selected for fiber optic (FO).</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+    </xs:attributeGroup>
+    <xs:attributeGroup name="TopologyAttributes">
+        <xs:annotation>
+            <xs:documentation>Attribute group of the following attributes:
+                &lt;ul&gt;
+                    &lt;li&gt;Topology ID&lt;/li&gt;
+                    &lt;li&gt;Topology Name&lt;/li&gt;
+                    &lt;li&gt;Topology Description&lt;/li&gt;
+                    &lt;li&gt;ListofNodes ID reference&lt;/li&gt;
+                    &lt;li&gt;Version&lt;/li&gt;
+                &lt;/ul&gt;
+            </xs:documentation>
+        </xs:annotation>
+        <xs:attribute name="TopologyID"
+                      type="xs:ID"
+                      use="required">
+            <xs:annotation>
+                <xs:documentation>Attribute to identify the topology. This identifier is referred in the related configuration file.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="TopologyName"
+                      type="xs:string">
+            <xs:annotation>
+                <xs:documentation>Attribute to specify a name for the topology.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="TopologyDescription"
+                      type="xs:string">
+            <xs:annotation>
+                <xs:documentation>Attribute to specify a description for the topology.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="ListOfNodesRefID"
+                      type="xs:string"
+                      use="required">
+            <xs:annotation>
+                <xs:documentation>Attribute which refers to the ID of the ListOfNodes file used in this topology.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="schemaVersion"
+                      type="xs:string"
+                      use="required"
+                      fixed="1.0">
+            <xs:annotation>
+                <xs:documentation>Attribute for versioning the topology xsd file. It is updated with each XSD revision to ensure there isn’t a mismatch between the project and the used XSD file.</xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+    </xs:attributeGroup>
+    <xs:simpleType name="PartnerPortType">
+        <xs:annotation>
+            <xs:documentation>Type to specify the port connection properties with the partner. If an IO device is assigned to an IO controller, this does not yet specify how the ports are connected to each other. Although a port interconnection is not required to make use of most of the Ethernet/PROFINET functions, a target topology can be specified. Notes:
+                &lt;ul&gt;
+                    &lt;li&gt;Make sure that no invalid ring structures occur through the interconnection of ports.&lt;/li&gt;
+                    &lt;li&gt;Port interconnection is only advisable for devices that support the topology configuration.&lt;/li&gt;
+                &lt;/ul&gt;
+                &lt;br/&gt;
+                Enumeration values:
+                &lt;ul&gt;
+                    &lt;li&gt;"SinglePartner": Regular port to port connection.&lt;/li&gt;
+                    &lt;li&gt;"Set by user program": If the partner port is to be defined by the user program, the option "Partner set by user program" has to be selected as partner port. No PartnerPort should be defined.&lt;/li&gt;
+                &lt;/ul&gt;
+			</xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="SinglePartner"/>
+            <xs:enumeration value="SetByUserProgram"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="PropertiesType">
+        <xs:annotation>
+            <xs:documentation>Type to represent the cable length and signal delay properties.</xs:documentation>
+        </xs:annotation>
+        <xs:choice>
+            <xs:element name="CableLength"
+                        type="CableLength"
+                        default="max100m"
+                        minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation>Element to specify the length of the connecting cable to the partner port in meters. Can only be introduced if the device supports IRT. </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="SignalDelay"
+                        type="xs:float"
+                        default="0.6"
+                        minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation>Element to specify the signal delay on the line in microseconds. Normally, the signal delay is calculated automatically, but it can also be set, for example, when using a media converter or when the cable lengths are different from those that can be selected in the ist of cable lengths. Can only be introduced if the device supports IRT. </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+        </xs:choice>
+    </xs:complexType>
+    <xs:complexType name="TopologyType">
+        <xs:annotation>
+            <xs:documentation>Type to represent an Ethernet topology configuration.</xs:documentation>
+        </xs:annotation>
+        <xs:sequence>
+            <xs:element name="PortInterconnection"
+                        maxOccurs="unbounded">
+                <xs:annotation>
+                    <xs:documentation>Element to represent the physical interconnection of Ethernet ports. Here, you specifically determine which Ethernet port of a device is to be connected with a specific Ethernet port of another device by means of an Ethernet cable (preset topology). </xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="LocalPort">
+                            <xs:annotation>
+                                <xs:documentation>In this element, you can find the settings at the local port. In the case of fiber-optic cable you can, for example, set the cable names here.</xs:documentation>
+                            </xs:annotation>
+                            <xs:complexType>
+                                <xs:annotation>
+                                    <xs:documentation>Type to represent a local port.</xs:documentation>
+                                </xs:annotation>
+                                <xs:attributeGroup ref="PortAttributes"/>
+                                <xs:attribute name="PartnerPortType"
+                                              type="PartnerPortType"
+                                              use="optional"
+                                              default="SinglePartner">
+                                    <xs:annotation>
+                                        <xs:documentation>Attribute to specify the partner port of the local port.</xs:documentation>
+                                    </xs:annotation>
+                                </xs:attribute>
+                            </xs:complexType>
+                        </xs:element>
+                        <xs:element name="PartnerPort"
+                                    minOccurs="0"
+                                    maxOccurs="1">
+                            <xs:annotation>
+                                <xs:documentation>In this element, you can find the settings at the partner port. If no partner ports are defined, it means machine tailoring is being used.</xs:documentation>
+                            </xs:annotation>
+                            <xs:complexType>
+                                <xs:attributeGroup ref="PortAttributes"/>
+                            </xs:complexType>
+                        </xs:element>
+                        <xs:element name="Properties"
+                                    type="PropertiesType"
+                                    minOccurs="0">
+                            <xs:annotation>
+                                <xs:documentation>Properties of the interconnection between ports. If Properties element is used, either CableLength or SignalDelay value needs to be provided. If not used, default values for SignalDelay will be used based on the medium of the connected ports (i.e. CU, FO or POF). The default values are CU: 0.6, POF: 0.3, and FO: 18</xs:documentation>
+                            </xs:annotation>
+                        </xs:element>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+        <xs:attributeGroup ref="TopologyAttributes"/>
+    </xs:complexType>
+</xs:schema>
