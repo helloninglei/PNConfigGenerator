@@ -20,6 +20,7 @@ public:
     ~MainWindow();
 
 private slots:
+    // File menu actions
     void onOpenProjectFolder();
     
     // Tools menu actions
@@ -28,6 +29,11 @@ private slots:
     
     // Help menu actions
     void onAbout();
+    
+    // Configuration UI actions
+    void onBrowseGsdml();
+    void onBrowseOutput();
+    void onGenerateConfiguration();
 
 private:
     void setupUi();
@@ -38,7 +44,7 @@ private:
     
     Ui::MainWindow *ui;
     
-    // Configuration loading state
+    // Configuration loading state (for Open Project Folder workflow)
     QString m_loadedConfigPath;
     QString m_loadedListOfNodesPath;
     bool m_configurationLoaded = false;

@@ -6,27 +6,238 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1200</width>
-    <height>800</height>
+    <width>900</width>
+    <height>700</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>PNConfigGenerator</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout">
+   <layout class="QVBoxLayout" name="mainLayout">
     <item>
-     <widget class="QLabel" name="welcomeLabel">
-      <property name="text">
-       <string>Welcome to PNConfigGenerator
-
-Use Tools &gt; Quick Setup Wizard to get started quickly,
-or File &gt; Import GSD to add devices to the catalog.</string>
+     <layout class="QHBoxLayout" name="configLayout">
+      <!-- Master Station Configuration -->
+      <item>
+       <widget class="QGroupBox" name="masterGroup">
+        <property name="title">
+         <string>Master Station (Controller)</string>
+        </property>
+        <layout class="QFormLayout" name="masterFormLayout">
+         <item row="0" column="0">
+          <widget class="QLabel" name="masterNameLabel">
+           <property name="text">
+            <string>Device Name:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="masterNameEdit">
+           <property name="text">
+            <string>PN_Driver</string>
+           </property>
+           <property name="placeholderText">
+            <string>e.g., PN_Driver</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="masterIPLabel">
+           <property name="text">
+            <string>IP Address:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="masterIPEdit">
+           <property name="text">
+            <string>192.168.0.1</string>
+           </property>
+           <property name="placeholderText">
+            <string>e.g., 192.168.0.1</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="masterRouterLabel">
+           <property name="text">
+            <string>Router IP:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QLineEdit" name="masterRouterEdit">
+           <property name="text">
+            <string>0.0.0.0</string>
+           </property>
+           <property name="placeholderText">
+            <string>e.g., 0.0.0.0 (optional)</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <!-- Slave Station Configuration -->
+      <item>
+       <widget class="QGroupBox" name="slaveGroup">
+        <property name="title">
+         <string>Slave Station (IO Device)</string>
+        </property>
+        <layout class="QFormLayout" name="slaveFormLayout">
+         <item row="0" column="0">
+          <widget class="QLabel" name="slaveNameLabel">
+           <property name="text">
+            <string>Device Name:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="slaveNameEdit">
+           <property name="text">
+            <string>IO_Device</string>
+           </property>
+           <property name="placeholderText">
+            <string>e.g., IO_Device</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="slaveIPLabel">
+           <property name="text">
+            <string>IP Address:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="slaveIPEdit">
+           <property name="text">
+            <string>192.168.0.2</string>
+           </property>
+           <property name="placeholderText">
+            <string>e.g., 192.168.0.2</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="slaveRouterLabel">
+           <property name="text">
+            <string>Router IP:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QLineEdit" name="slaveRouterEdit">
+           <property name="placeholderText">
+            <string>e.g., 0.0.0.0 (optional)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="gsdmlLabel">
+           <property name="text">
+            <string>GSDML File:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <layout class="QHBoxLayout" name="gsdmlLayout">
+           <item>
+            <widget class="QLineEdit" name="gsdmlPathEdit">
+             <property name="placeholderText">
+              <string>Select GSDML file...</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="browseGsdmlButton">
+             <property name="text">
+              <string>Browse...</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <!-- Output Configuration -->
+    <item>
+     <widget class="QGroupBox" name="outputGroup">
+      <property name="title">
+       <string>Output Settings</string>
       </property>
-      <property name="alignment">
-       <set>Qt::AlignCenter</set>
-      </property>
+      <layout class="QHBoxLayout" name="outputLayout">
+       <item>
+        <widget class="QLabel" name="outputLabel">
+         <property name="text">
+          <string>Output Directory:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="outputPathEdit">
+         <property name="placeholderText">
+          <string>Select output directory...</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="browseOutputButton">
+         <property name="text">
+          <string>Browse...</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
+    </item>
+    <!-- Spacer -->
+    <item>
+     <spacer name="verticalSpacer">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>40</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <!-- Generate Button -->
+    <item>
+     <layout class="QHBoxLayout" name="buttonLayout">
+      <item>
+       <spacer name="buttonSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="generateButton">
+        <property name="text">
+         <string>Generate Configuration</string>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>200</width>
+          <height>40</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
    </layout>
   </widget>
@@ -35,7 +246,7 @@ or File &gt; Import GSD to add devices to the catalog.</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1200</width>
+     <width>900</width>
      <height>21</height>
     </rect>
    </property>

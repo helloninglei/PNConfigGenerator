@@ -7,6 +7,9 @@
 #include "Wizards/QuickSetupWizard.h"
 #include "../PNConfigLib/ProjectManager/ProjectManager.h"
 #include "../PNConfigLib/ConfigReader/ConfigReader.h"
+#include "../PNConfigLib/ConfigGenerator/ConfigurationBuilder.h"
+#include "../PNConfigLib/ConfigGenerator/ListOfNodesBuilder.h"
+#include "../PNConfigLib/Compiler/Compiler.h"
 #include <QMenuBar>
 #include <QToolBar>
 #include <QStatusBar>
@@ -38,10 +41,14 @@ MainWindow::~MainWindow()
 void MainWindow::setupUi()
 {
     setWindowTitle("PNConfigGenerator - PROFINET Device Configuration Tool");
-    resize(1200, 800);
+    resize(900, 700);
+    
+    // Set default output path
+    QString defaultOutput = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation) + "/PNConfig_Output";
+    ui->outputPathEdit->setText(defaultOutput);
     
     // Status bar
-    statusBar()->showMessage("Ready");
+    statusBar()->showMessage("Ready - Configure devices and click 'Generate Configuration'");
 }
 
 void MainWindow::setupMenus()
@@ -81,37 +88,185 @@ void MainWindow::setupToolbar()
     toolbar->addAction(tr("Open"), this, &MainWindow::onOpenProjectFolder);
     toolbar->addSeparator();
     toolbar->addAction(tr("Quick Setup"), this, &MainWindow::onQuickSetupWizard);
-    toolbar->addAction(tr("Generate"), this, &MainWindow::onGenerateOutput);
-    
-    // Find generate action in toolbar to enable/disable it later if needed, 
-    // or we can just rely on the menu action state if they share the action.
-    // Ideally we should create QActions as members and share them between menu and toolbar.
-    // For now we just add them as separate actions which simplifies things but doesn't sync state perfectly.
-    // However, the menu action has an object name "generateOutputAction" which we use to find it.
-    // The toolbar action is separate here. To sync them properly we'd need to refactor to use QAction members.
-    // Given the request to just "clean up", let's keep it simple.
-    // Actually, onOpenConfiguration enables "generateOutputAction", which is the menu action.
-    // The toolbar button won't be enabled/disabled automatically unless we share the action object.
-    // Let's improve this slightly by using the same logic or just accepting it for now.
-    // User asked to "remove unused", not "implement perfect state sync".
-    // I'll stick to removing unused ones.
 }
 
 void MainWindow::setupDockWidgets()
 {
-    // TODO: Add dock widgets for:
-    // - Device catalog browser (left)
-    // - Project tree (left)
-    // - Configuration editor (right)
-    // - Properties panel (right)
+    // Reserved for future dock widgets
 }
 
 void MainWindow::setupConnections()
 {
-    // TODO: Connect signals and slots
+    // Connect UI buttons to slots
+    connect(ui->browseGsdmlButton, &QPushButton::clicked, this, &MainWindow::onBrowseGsdml);
+    connect(ui->browseOutputButton, &QPushButton::clicked, this, &MainWindow::onBrowseOutput);
+    connect(ui->generateButton, &QPushButton::clicked, this, &MainWindow::onGenerateConfiguration);
 }
 
+void MainWindow::onBrowseGsdml()
+{
+    QString fileName = QFileDialog::getOpenFileName(
+        this,
+        tr("Select GSDML File"),
+        "",
+        tr("GSDML Files (*.xml);;All Files (*)")
+    );
+    
+    if (!fileName.isEmpty()) {
+        ui->gsdmlPathEdit->setText(fileName);
+        statusBar()->showMessage(tr("GSDML file selected: %1").arg(QFileInfo(fileName).fileName()), 3000);
+    }
+}
 
+void MainWindow::onBrowseOutput()
+{
+    QString dir = QFileDialog::getExistingDirectory(
+        this,
+        tr("Select Output Directory"),
+        ui->outputPathEdit->text(),
+        QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks
+    );
+    
+    if (!dir.isEmpty()) {
+        ui->outputPathEdit->setText(dir);
+    }
+}
+
+void MainWindow::onGenerateConfiguration()
+{
+    // Validate inputs
+    QString masterName = ui->masterNameEdit->text().trimmed();
+    QString masterIP = ui->masterIPEdit->text().trimmed();
+    QString slaveName = ui->slaveNameEdit->text().trimmed();
+    QString slaveIP = ui->slaveIPEdit->text().trimmed();
+    QString gsdmlPath = ui->gsdmlPathEdit->text().trimmed();
+    QString outputPath = ui->outputPathEdit->text().trimmed();
+    
+    if (masterName.isEmpty() || masterIP.isEmpty()) {
+        QMessageBox::warning(this, tr("Validation Error"),
+            tr("Please enter Master Station name and IP address."));
+        return;
+    }
+    
+    if (slaveName.isEmpty() || slaveIP.isEmpty()) {
+        QMessageBox::warning(this, tr("Validation Error"),
+            tr("Please enter Slave Station name and IP address."));
+        return;
+    }
+    
+    if (gsdmlPath.isEmpty() || !QFile::exists(gsdmlPath)) {
+        QMessageBox::warning(this, tr("Validation Error"),
+            tr("Please select a valid GSDML file."));
+        return;
+    }
+    
+    if (outputPath.isEmpty()) {
+        QMessageBox::warning(this, tr("Validation Error"),
+            tr("Please select an output directory."));
+        return;
+    }
+    
+    // Create output directory if it doesn't exist
+    QDir dir;
+    if (!dir.exists(outputPath)) {
+        if (!dir.mkpath(outputPath)) {
+            QMessageBox::critical(this, tr("Error"),
+                tr("Failed to create output directory: %1").arg(outputPath));
+            return;
+        }
+    }
+    
+    statusBar()->showMessage(tr("Generating configuration files..."));
+    
+    // Prepare configuration paths
+    QString configPath = QDir(outputPath).filePath("Configuration.xml");
+    QString nodesPath = QDir(outputPath).filePath("ListOfNodes.xml");
+    QString finalOutputPath = QDir(outputPath).filePath("PROFINET_Driver_Output.xml");
+    
+    try {
+        // Step 1: Generate Configuration.xml
+        PNConfigLib::ConfigurationBuilder::DeviceConfig masterConfig;
+        masterConfig.name = masterName;
+        masterConfig.ipAddress = masterIP;
+        masterConfig.routerIpAddress = ui->masterRouterEdit->text().trimmed();
+        masterConfig.inputStartAddress = 0;
+        masterConfig.outputStartAddress = 0;
+        
+        PNConfigLib::ConfigurationBuilder::DeviceConfig slaveConfig;
+        slaveConfig.name = slaveName;
+        slaveConfig.ipAddress = slaveIP;
+        slaveConfig.routerIpAddress = ui->slaveRouterEdit->text().trimmed();
+        slaveConfig.inputStartAddress = 0;
+        slaveConfig.outputStartAddress = 0;
+        
+        bool success = PNConfigLib::ConfigurationBuilder::saveConfigurationXml(
+            gsdmlPath, masterConfig, slaveConfig, configPath);
+        
+        if (!success) {
+            QMessageBox::critical(this, tr("Error"),
+                tr("Failed to generate Configuration.xml"));
+            statusBar()->showMessage(tr("Generation failed"), 5000);
+            return;
+        }
+        
+        // Step 2: Generate ListOfNodes.xml
+        PNConfigLib::ListOfNodesBuilder::DeviceNode masterNode;
+        masterNode.name = masterName;
+        masterNode.ipAddress = masterIP;
+        masterNode.routerIpAddress = ui->masterRouterEdit->text().trimmed();
+        
+        PNConfigLib::ListOfNodesBuilder::DeviceNode slaveNode;
+        slaveNode.name = slaveName;
+        slaveNode.ipAddress = slaveIP;
+        slaveNode.routerIpAddress = ui->slaveRouterEdit->text().trimmed();
+        
+        success = PNConfigLib::ListOfNodesBuilder::saveListOfNodesXml(
+            gsdmlPath, masterNode, slaveNode, nodesPath);
+        
+        if (!success) {
+            QMessageBox::critical(this, tr("Error"),
+                tr("Failed to generate ListOfNodes.xml"));
+            statusBar()->showMessage(tr("Generation failed"), 5000);
+            return;
+        }
+        
+        // Step 3: Read and compile to final output
+        auto config = PNConfigLib::ConfigReader::parseConfiguration(configPath);
+        auto nodes = PNConfigLib::ConfigReader::parseListOfNodes(nodesPath);
+        
+        success = PNConfigLib::Compiler::compile(config, nodes, finalOutputPath);
+        
+        if (!success) {
+            QMessageBox::critical(this, tr("Compilation Error"),
+                tr("Failed to compile final output file."));
+            statusBar()->showMessage(tr("Compilation failed"), 5000);
+            return;
+        }
+        
+        // Success!
+        statusBar()->showMessage(tr("Configuration generated successfully!"), 5000);
+        
+        QMessageBox::information(this, tr("Success"),
+            tr("Configuration files generated successfully!\n\n"
+               "Output Directory:\n%1\n\n"
+               "Generated Files:\n"
+               "• Configuration.xml\n"
+               "• ListOfNodes.xml\n"
+               "• PROFINET_Driver_Output.xml").arg(outputPath));
+        
+        // Open folder in explorer
+        #ifdef Q_OS_WIN
+        QString explorer = "explorer.exe";
+        QString param = "/select," + QDir::toNativeSeparators(finalOutputPath);
+        QProcess::startDetached(explorer, QStringList() << param);
+        #endif
+        
+    } catch (const std::exception& e) {
+        QMessageBox::critical(this, tr("Error"),
+            tr("Error during generation:\n%1").arg(e.what()));
+        statusBar()->showMessage(tr("Generation failed"), 5000);
+    }
+}
 
 void MainWindow::onQuickSetupWizard()
 {
@@ -125,8 +280,6 @@ void MainWindow::onQuickSetupWizard()
         }
     }
 }
-
-
 
 void MainWindow::onAbout()
 {
