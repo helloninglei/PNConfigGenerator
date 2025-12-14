@@ -4,10 +4,11 @@
 
 #include "ConfigurationBuilder.h"
 #include "../GsdmlParser/GsdmlParser.h"
+#include "../tinyxml2/tinyxml2.h"
 #include <QFile>
 #include <QTextStream>
-#include <QDomDocument>
-#include <QDomElement>
+
+using namespace tinyxml2;
 
 namespace PNConfigLib {
 
@@ -24,129 +25,128 @@ QString ConfigurationBuilder::generateConfigurationXml(
         return QString();
     }
     
-    QDomDocument doc;
+    XMLDocument doc;
     
-    // XML declaration is handled by QDomDocument
-    QDomProcessingInstruction xmlDecl = doc.createProcessingInstruction(
-        "xml", "version=\"1.0\" encoding=\"utf-8\"");
-    doc.appendChild(xmlDecl);
+    // XML declaration
+    XMLDeclaration* decl = doc.NewDeclaration("xml version=\"1.0\" encoding=\"utf-8\"");
+    doc.InsertEndChild(decl);
     
     // Root element with namespaces
-    QDomElement root = doc.createElement("Configuration");
-    root.setAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
-    root.setAttribute("xmlns:xsd", "http://www.w3.org/2001/XMLSchema");
-    root.setAttribute("ConfigurationID", "ConfigurationID");
-    root.setAttribute("ConfigurationName", "ConfigurationName");
-    root.setAttribute("ListOfNodesRefID", "ListOfNodesID");
-    root.setAttribute("schemaVersion", "1.0");
-    root.setAttribute("xmlns", "http://www.siemens.com/Automation/PNConfigLib/Configuration");
-    doc.appendChild(root);
+    XMLElement* root = doc.NewElement("Configuration");
+    root->SetAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
+    root->SetAttribute("xmlns:xsd", "http://www.w3.org/2001/XMLSchema");
+    root->SetAttribute("ConfigurationID", "ConfigurationID");
+    root->SetAttribute("ConfigurationName", "ConfigurationName");
+    root->SetAttribute("ListOfNodesRefID", "ListOfNodesID");
+    root->SetAttribute("schemaVersion", "1.0");
+    root->SetAttribute("xmlns", "http://www.siemens.com/Automation/PNConfigLib/Configuration");
+    doc.InsertEndChild(root);
     
     // Devices container
-    QDomElement devices = doc.createElement("Devices");
-    root.appendChild(devices);
+    XMLElement* devices = doc.NewElement("Devices");
+    root->InsertEndChild(devices);
     
     // Central Device (Master/Controller)
-    QDomElement centralDevice = doc.createElement("CentralDevice");
-    centralDevice.setAttribute("DeviceRefID", masterConfig.name + "_ID");
-    devices.appendChild(centralDevice);
+    XMLElement* centralDevice = doc.NewElement("CentralDevice");
+    centralDevice->SetAttribute("DeviceRefID", (masterConfig.name + "_ID").toStdString().c_str());
+    devices->InsertEndChild(centralDevice);
     
-    QDomElement centralInterface = doc.createElement("CentralDeviceInterface");
-    centralInterface.setAttribute("InterfaceRefID", masterConfig.name + "_Interface");
-    centralDevice.appendChild(centralInterface);
+    XMLElement* centralInterface = doc.NewElement("CentralDeviceInterface");
+    centralInterface->SetAttribute("InterfaceRefID", (masterConfig.name + "_Interface").toStdString().c_str());
+    centralDevice->InsertEndChild(centralInterface);
     
     // Ethernet Addresses
-    QDomElement ethAddresses = doc.createElement("EthernetAddresses");
-    centralInterface.appendChild(ethAddresses);
+    XMLElement* ethAddresses = doc.NewElement("EthernetAddresses");
+    centralInterface->InsertEndChild(ethAddresses);
     
-    QDomElement ipProtocol = doc.createElement("IPProtocol");
-    ethAddresses.appendChild(ipProtocol);
+    XMLElement* ipProtocol = doc.NewElement("IPProtocol");
+    ethAddresses->InsertEndChild(ipProtocol);
     
-    QDomElement setInProject = doc.createElement("SetInTheProject");
-    setInProject.setAttribute("IPAddress", masterConfig.ipAddress);
-    setInProject.setAttribute("SubnetMask", "255.255.255.0");
+    XMLElement* setInProject = doc.NewElement("SetInTheProject");
+    setInProject->SetAttribute("IPAddress", masterConfig.ipAddress.toStdString().c_str());
+    setInProject->SetAttribute("SubnetMask", "255.255.255.0");
     if (!masterConfig.routerIpAddress.isEmpty() && masterConfig.routerIpAddress != "0.0.0.0") {
-        setInProject.setAttribute("RouterAddress", masterConfig.routerIpAddress);
+        setInProject->SetAttribute("RouterAddress", masterConfig.routerIpAddress.toStdString().c_str());
     }
-    ipProtocol.appendChild(setInProject);
+    ipProtocol->InsertEndChild(setInProject);
     
-    QDomElement pnDeviceName = doc.createElement("PROFINETDeviceName");
-    ethAddresses.appendChild(pnDeviceName);
+    XMLElement* pnDeviceName = doc.NewElement("PROFINETDeviceName");
+    ethAddresses->InsertEndChild(pnDeviceName);
     
-    QDomElement deviceNameText = doc.createElement("PNDeviceName");
-    deviceNameText.appendChild(doc.createTextNode(masterConfig.name));
-    pnDeviceName.appendChild(deviceNameText);
+    XMLElement* deviceNameText = doc.NewElement("PNDeviceName");
+    deviceNameText->SetText(masterConfig.name.toStdString().c_str());
+    pnDeviceName->InsertEndChild(deviceNameText);
     
     // Advanced Options for Central Device
-    QDomElement advancedOptions = doc.createElement("AdvancedOptions");
-    centralInterface.appendChild(advancedOptions);
+    XMLElement* advancedOptions = doc.NewElement("AdvancedOptions");
+    centralInterface->InsertEndChild(advancedOptions);
     
-    QDomElement realTimeSettings = doc.createElement("RealTimeSettings");
-    advancedOptions.appendChild(realTimeSettings);
+    XMLElement* realTimeSettings = doc.NewElement("RealTimeSettings");
+    advancedOptions->InsertEndChild(realTimeSettings);
     
-    QDomElement ioCommunication = doc.createElement("IOCommunication");
-    ioCommunication.setAttribute("SendClock", "1");
-    realTimeSettings.appendChild(ioCommunication);
+    XMLElement* ioCommunication = doc.NewElement("IOCommunication");
+    ioCommunication->SetAttribute("SendClock", "1");
+    realTimeSettings->InsertEndChild(ioCommunication);
     
     // Decentralized Device (Slave/IO Device)
-    QDomElement decentralDevice = doc.createElement("DecentralDevice");
-    decentralDevice.setAttribute("DeviceRefID", slaveConfig.name + "_ID");
-    devices.appendChild(decentralDevice);
+    XMLElement* decentralDevice = doc.NewElement("DecentralDevice");
+    decentralDevice->SetAttribute("DeviceRefID", (slaveConfig.name + "_ID").toStdString().c_str());
+    devices->InsertEndChild(decentralDevice);
     
-    QDomElement decentralInterface = doc.createElement("DecentralDeviceInterface");
-    decentralInterface.setAttribute("InterfaceRefID", slaveConfig.name + "_Interface");
-    decentralDevice.appendChild(decentralInterface);
+    XMLElement* decentralInterface = doc.NewElement("DecentralDeviceInterface");
+    decentralInterface->SetAttribute("InterfaceRefID", (slaveConfig.name + "_Interface").toStdString().c_str());
+    decentralDevice->InsertEndChild(decentralInterface);
     
     // Ethernet Addresses for Slave
-    QDomElement slaveEthAddresses = doc.createElement("EthernetAddresses");
-    decentralInterface.appendChild(slaveEthAddresses);
+    XMLElement* slaveEthAddresses = doc.NewElement("EthernetAddresses");
+    decentralInterface->InsertEndChild(slaveEthAddresses);
     
-    QDomElement slaveIpProtocol = doc.createElement("IPProtocol");
-    slaveEthAddresses.appendChild(slaveIpProtocol);
+    XMLElement* slaveIpProtocol = doc.NewElement("IPProtocol");
+    slaveEthAddresses->InsertEndChild(slaveIpProtocol);
     
-    QDomElement slaveSetInProject = doc.createElement("SetInTheProject");
-    slaveSetInProject.setAttribute("IPAddress", slaveConfig.ipAddress);
-    slaveSetInProject.setAttribute("SubnetMask", "255.255.255.0");
+    XMLElement* slaveSetInProject = doc.NewElement("SetInTheProject");
+    slaveSetInProject->SetAttribute("IPAddress", slaveConfig.ipAddress.toStdString().c_str());
+    slaveSetInProject->SetAttribute("SubnetMask", "255.255.255.0");
     if (!slaveConfig.routerIpAddress.isEmpty() && slaveConfig.routerIpAddress != "0.0.0.0") {
-        slaveSetInProject.setAttribute("RouterAddress", slaveConfig.routerIpAddress);
+        slaveSetInProject->SetAttribute("RouterAddress", slaveConfig.routerIpAddress.toStdString().c_str());
     }
-    slaveIpProtocol.appendChild(slaveSetInProject);
+    slaveIpProtocol->InsertEndChild(slaveSetInProject);
     
-    QDomElement slavePnDeviceName = doc.createElement("PROFINETDeviceName");
-    slavePnDeviceName.setAttribute("DeviceNumber", "1");
-    slaveEthAddresses.appendChild(slavePnDeviceName);
+    XMLElement* slavePnDeviceName = doc.NewElement("PROFINETDeviceName");
+    slavePnDeviceName->SetAttribute("DeviceNumber", "1");
+    slaveEthAddresses->InsertEndChild(slavePnDeviceName);
     
-    QDomElement slaveDeviceNameText = doc.createElement("PNDeviceName");
-    slaveDeviceNameText.appendChild(doc.createTextNode(slaveConfig.name));
-    slavePnDeviceName.appendChild(slaveDeviceNameText);
+    XMLElement* slaveDeviceNameText = doc.NewElement("PNDeviceName");
+    slaveDeviceNameText->SetText(slaveConfig.name.toStdString().c_str());
+    slavePnDeviceName->InsertEndChild(slaveDeviceNameText);
     
     // Advanced Options for Slave Device
-    QDomElement slaveAdvancedOptions = doc.createElement("AdvancedOptions");
-    decentralInterface.appendChild(slaveAdvancedOptions);
+    XMLElement* slaveAdvancedOptions = doc.NewElement("AdvancedOptions");
+    decentralInterface->InsertEndChild(slaveAdvancedOptions);
     
-    QDomElement interfaceOptions = doc.createElement("InterfaceOptions");
-    slaveAdvancedOptions.appendChild(interfaceOptions);
+    XMLElement* interfaceOptions = doc.NewElement("InterfaceOptions");
+    slaveAdvancedOptions->InsertEndChild(interfaceOptions);
     
-    QDomElement ports = doc.createElement("Ports");
-    slaveAdvancedOptions.appendChild(ports);
+    XMLElement* ports = doc.NewElement("Ports");
+    slaveAdvancedOptions->InsertEndChild(ports);
     
-    QDomElement mediaRedundancy = doc.createElement("MediaRedundancy");
-    slaveAdvancedOptions.appendChild(mediaRedundancy);
+    XMLElement* mediaRedundancy = doc.NewElement("MediaRedundancy");
+    slaveAdvancedOptions->InsertEndChild(mediaRedundancy);
     
-    QDomElement slaveRealTimeSettings = doc.createElement("RealTimeSettings");
-    slaveAdvancedOptions.appendChild(slaveRealTimeSettings);
+    XMLElement* slaveRealTimeSettings = doc.NewElement("RealTimeSettings");
+    slaveAdvancedOptions->InsertEndChild(slaveRealTimeSettings);
     
-    QDomElement ioCycle = doc.createElement("IOCycle");
-    slaveRealTimeSettings.appendChild(ioCycle);
+    XMLElement* ioCycle = doc.NewElement("IOCycle");
+    slaveRealTimeSettings->InsertEndChild(ioCycle);
     
-    QDomElement sharedDevicePart = doc.createElement("SharedDevicePart");
-    ioCycle.appendChild(sharedDevicePart);
+    XMLElement* sharedDevicePart = doc.NewElement("SharedDevicePart");
+    ioCycle->InsertEndChild(sharedDevicePart);
     
-    QDomElement updateTime = doc.createElement("UpdateTime");
-    ioCycle.appendChild(updateTime);
+    XMLElement* updateTime = doc.NewElement("UpdateTime");
+    ioCycle->InsertEndChild(updateTime);
     
-    QDomElement synchronization = doc.createElement("Synchronization");
-    slaveRealTimeSettings.appendChild(synchronization);
+    XMLElement* synchronization = doc.NewElement("Synchronization");
+    slaveRealTimeSettings->InsertEndChild(synchronization);
     
     // Add modules and submodules
     int currentInputAddress = slaveConfig.inputStartAddress;
@@ -156,59 +156,61 @@ QString ConfigurationBuilder::generateConfigurationXml(
     int slotNumber = 1;
     
     for (const ModuleInfo& module : gsdmlInfo.modules) {
-        QDomElement moduleElem = doc.createElement("Module");
-        moduleElem.setAttribute("ModuleID", QString("Module_%1").arg(moduleIndex++));
-        moduleElem.setAttribute("SlotNumber", QString::number(slotNumber++));
-        moduleElem.setAttribute("GSDRefID", module.id);
-        decentralDevice.appendChild(moduleElem);
+        XMLElement* moduleElem = doc.NewElement("Module");
+        moduleElem->SetAttribute("ModuleID", QString("Module_%1").arg(moduleIndex++).toStdString().c_str());
+        moduleElem->SetAttribute("SlotNumber", slotNumber++);
+        moduleElem->SetAttribute("GSDRefID", module.id.toStdString().c_str());
+        decentralDevice->InsertEndChild(moduleElem);
         
-        QDomElement moduleIOAddresses = doc.createElement("IOAddresses");
-        moduleElem.appendChild(moduleIOAddresses);
+        XMLElement* moduleIOAddresses = doc.NewElement("IOAddresses");
+        moduleElem->InsertEndChild(moduleIOAddresses);
         
         int subslotNumber = 1;
         for (const SubmoduleInfo& submodule : module.submodules) {
-            QDomElement submoduleElem = doc.createElement("Submodule");
-            submoduleElem.setAttribute("SubmoduleID", QString("Submodule_%1").arg(submoduleIndex++));
-            submoduleElem.setAttribute("SubslotNumber", QString::number(subslotNumber++));
-            submoduleElem.setAttribute("GSDRefID", submodule.id);
-            moduleElem.appendChild(submoduleElem);
+            XMLElement* submoduleElem = doc.NewElement("Submodule");
+            submoduleElem->SetAttribute("SubmoduleID", QString("Submodule_%1").arg(submoduleIndex++).toStdString().c_str());
+            submoduleElem->SetAttribute("SubslotNumber", subslotNumber++);
+            submoduleElem->SetAttribute("GSDRefID", submodule.id.toStdString().c_str());
+            moduleElem->InsertEndChild(submoduleElem);
             
-            QDomElement submoduleIOAddresses = doc.createElement("IOAddresses");
-            submoduleElem.appendChild(submoduleIOAddresses);
+            XMLElement* submoduleIOAddresses = doc.NewElement("IOAddresses");
+            submoduleElem->InsertEndChild(submoduleIOAddresses);
             
             // Add input addresses if needed
             if (submodule.inputDataLength > 0) {
-                QDomElement inputAddresses = doc.createElement("InputAddresses");
-                inputAddresses.setAttribute("StartAddress", QString::number(currentInputAddress));
-                submoduleIOAddresses.appendChild(inputAddresses);
+                XMLElement* inputAddresses = doc.NewElement("InputAddresses");
+                inputAddresses->SetAttribute("StartAddress", currentInputAddress);
+                submoduleIOAddresses->InsertEndChild(inputAddresses);
                 currentInputAddress += submodule.inputDataLength;
             }
             
             // Add output addresses if needed
             if (submodule.outputDataLength > 0) {
-                QDomElement outputAddresses = doc.createElement("OutputAddresses");
-                outputAddresses.setAttribute("StartAddress", QString::number(currentOutputAddress));
-                submoduleIOAddresses.appendChild(outputAddresses);
+                XMLElement* outputAddresses = doc.NewElement("OutputAddresses");
+                outputAddresses->SetAttribute("StartAddress", currentOutputAddress);
+                submoduleIOAddresses->InsertEndChild(outputAddresses);
                 currentOutputAddress += submodule.outputDataLength;
             }
         }
     }
     
     // SharedDevice element
-    QDomElement sharedDevice = doc.createElement("SharedDevice");
-    decentralDevice.appendChild(sharedDevice);
+    XMLElement* sharedDevice = doc.NewElement("SharedDevice");
+    decentralDevice->InsertEndChild(sharedDevice);
     
     // AdvancedConfiguration
-    QDomElement advancedConfig = doc.createElement("AdvancedConfiguration");
-    decentralDevice.appendChild(advancedConfig);
+    XMLElement* advancedConfig = doc.NewElement("AdvancedConfiguration");
+    decentralDevice->InsertEndChild(advancedConfig);
     
-    QDomElement snmp = doc.createElement("Snmp");
-    advancedConfig.appendChild(snmp);
+    XMLElement* snmp = doc.NewElement("Snmp");
+    advancedConfig->InsertEndChild(snmp);
     
-    QDomElement dcp = doc.createElement("Dcp");
-    advancedConfig.appendChild(dcp);
+    XMLElement* dcp = doc.NewElement("Dcp");
+    advancedConfig->InsertEndChild(dcp);
     
-    return doc.toString(2); // Indent with 2 spaces
+    XMLPrinter printer;
+    doc.Print(&printer);
+    return QString::fromUtf8(printer.CStr());
 }
 
 bool ConfigurationBuilder::saveConfigurationXml(

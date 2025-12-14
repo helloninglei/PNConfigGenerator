@@ -5,8 +5,10 @@
 #include <QVariant>
 #include <QList>
 #include <QHash>
-#include <QDomDocument>
-#include <QDomElement>
+namespace tinyxml2 {
+class XMLDocument;
+class XMLElement;
+}
 
 namespace PNConfigLib {
 
@@ -54,9 +56,9 @@ struct XmlObject {
 
 class XmlEntitySerializer {
 public:
-    static QDomElement serializeObject(QDomDocument& doc, const XmlObject& obj);
+    static tinyxml2::XMLElement* serializeObject(tinyxml2::XMLDocument* doc, const XmlObject& obj);
 private:
-    static QDomElement serializeVariable(QDomDocument& doc, const XmlVariable& var);
+    static tinyxml2::XMLElement* serializeVariable(tinyxml2::XMLDocument* doc, const XmlVariable& var);
     static QString dataTypeToString(XmlDataType type);
     static QString valueTypeToString(XmlValueType type);
 };

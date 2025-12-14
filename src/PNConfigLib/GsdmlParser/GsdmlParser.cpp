@@ -3,18 +3,27 @@
 /*****************************************************************************/
 
 #include "GsdmlParser.h"
+#include "tinyxml2/tinyxml2.h"
 #include <QFile>
 #include <QFileInfo>
-#include <QXmlStreamReader>
 #include <QRegularExpression>
 #include <QMutexLocker>
 #include <stdexcept>
+
+using namespace tinyxml2;
 
 namespace PNConfigLib {
 
 // Static member initialization
 QHash<QString, GsdmlInfo> GsdmlParser::s_gsdmlCache;
 QMutex GsdmlParser::s_cacheMutex;
+
+static QString getAttribute(XMLElement* element, const char* name, const QString& defaultValue = QString())
+{
+    if (!element) return defaultValue;
+    const char* val = element->Attribute(name);
+    return val ? QString(val) : defaultValue;
+}
 
 GsdmlInfo GsdmlParser::parseGSDML(const QString& gsdmlPath)
 {
@@ -81,143 +90,124 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
     info.filePath = gsdmlPath;
     info.lastModified = QFileInfo(gsdmlPath).lastModified();
     
-    QFile file(gsdmlPath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    XMLDocument doc;
+    XMLError err = doc.LoadFile(gsdmlPath.toStdString().c_str());
+    
+    if (err != XML_SUCCESS) {
         return fallbackParseGSDML(gsdmlPath);
     }
     
-    QXmlStreamReader xml(&file);
+    XMLElement* root = doc.RootElement(); // ISO15745Profile usually
+    if (!root) return fallbackParseGSDML(gsdmlPath);
+
+    XMLElement* profileBody = root->FirstChildElement("ProfileBody");
+    if (!profileBody) return fallbackParseGSDML(gsdmlPath);
     
-    // Parse XML structure
-    while (!xml.atEnd()) {
-        xml.readNext();
-        
-        if (xml.isStartElement()) {
-            QString name = xml.name().toString();
-            
-            // Extract device information
-            if (name == "DeviceIdentity" || name == "Device") {
-                QXmlStreamAttributes attrs = xml.attributes();
-                if (attrs.hasAttribute("DeviceName")) {
-                    info.deviceName = attrs.value("DeviceName").toString();
-                }
-                if (attrs.hasAttribute("VendorName")) {
-                    info.deviceVendor = attrs.value("VendorName").toString();
-                }
-                if (attrs.hasAttribute("ID")) {
-                    info.deviceID = attrs.value("ID").toString();
-                }
-            }
-            
-            // Extract device access point
-            else if (name == "DeviceAccessPointItem") {
-                QXmlStreamAttributes attrs = xml.attributes();
-                if (attrs.hasAttribute("ID")) {
-                    info.deviceAccessPointId = attrs.value("ID").toString();
-                }
-            }
-            
-            // Extract modules
-            else if (name == "ModuleItem") {
-                ModuleInfo module;
-                QXmlStreamAttributes attrs = xml.attributes();
-                
-                if (attrs.hasAttribute("ID")) {
-                    module.id = attrs.value("ID").toString();
-                }
-                if (attrs.hasAttribute("ModuleIdentNumber")) {
-                    QString identStr = attrs.value("ModuleIdentNumber").toString();
-                    module.moduleIdentNumber = identStr.startsWith("0x") ? 
-                        identStr.mid(2).toUInt(nullptr, 16) : identStr.toUInt();
-                }
-                
-                // Parse module contents
-                while (!(xml.isEndElement() && xml.name() == "ModuleItem")) {
-                    xml.readNext();
-                    
-                    if (xml.isStartElement()) {
-                        if (xml.name() == "ModuleInfo") {
-                            QXmlStreamAttributes modAttrs = xml.attributes();
-                            if (modAttrs.hasAttribute("Name")) {
-                                module.name = modAttrs.value("Name").toString();
-                            }
-                        }
-                        else if (xml.name() == "VirtualSubmoduleItem") {
-                            SubmoduleInfo submodule;
-                            QXmlStreamAttributes subAttrs = xml.attributes();
-                            
-                            if (subAttrs.hasAttribute("ID")) {
-                                submodule.id = subAttrs.value("ID").toString();
-                            }
-                            if (subAttrs.hasAttribute("SubmoduleIdentNumber")) {
-                                QString identStr = subAttrs.value("SubmoduleIdentNumber").toString();
-                                submodule.submoduleIdentNumber = identStr.startsWith("0x") ?
-                                    identStr.mid(2).toUInt(nullptr, 16) : identStr.toUInt();
-                            }
-                            
-                            // Parse submodule IOData
-                            while (!(xml.isEndElement() && xml.name() == "VirtualSubmoduleItem")) {
-                                xml.readNext();
-                                
-                                if (xml.isStartElement()) {
-                                    if (xml.name() == "ModuleInfo") {
-                                        QXmlStreamAttributes smAttrs = xml.attributes();
-                                        if (smAttrs.hasAttribute("Name")) {
-                                            submodule.name = smAttrs.value("Name").toString();
-                                        }
-                                    }
-                                    else if (xml.name() == "IOData") {
-                                        // Parse Input/Output data lengths
-                                        while (!(xml.isEndElement() && xml.name() == "IOData")) {
-                                            xml.readNext();
-                                            
-                                            if (xml.isStartElement()) {
-                                                if (xml.name() == "Input") {
-                                                    int length = 0;
-                                                    while (!(xml.isEndElement() && xml.name() == "Input")) {
-                                                        xml.readNext();
-                                                        if (xml.isStartElement() && xml.name() == "DataItem") {
-                                                            QXmlStreamAttributes dataAttrs = xml.attributes();
-                                                            if (dataAttrs.hasAttribute("DataType")) {
-                                                                QString dataType = dataAttrs.value("DataType").toString();
-                                                                length += getDataTypeLength(dataType);
-                                                            }
-                                                        }
-                                                    }
-                                                    submodule.inputDataLength = length;
-                                                }
-                                                else if (xml.name() == "Output") {
-                                                    int length = 0;
-                                                    while (!(xml.isEndElement() && xml.name() == "Output")) {
-                                                        xml.readNext();
-                                                        if (xml.isStartElement() && xml.name() == "DataItem") {
-                                                            QXmlStreamAttributes dataAttrs = xml.attributes();
-                                                            if (dataAttrs.hasAttribute("DataType")) {
-                                                                QString dataType = dataAttrs.value("DataType").toString();
-                                                                length += getDataTypeLength(dataType);
-                                                            }
-                                                        }
-                                                    }
-                                                    submodule.outputDataLength = length;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            module.submodules.append(submodule);
-                        }
-                    }
-                }
-                
-                info.modules.append(module);
-            }
+    XMLElement* appProcess = profileBody->FirstChildElement("ApplicationProcess");
+    if (!appProcess) return fallbackParseGSDML(gsdmlPath);
+    
+    // Extract device information
+    XMLElement* deviceIdent = appProcess->FirstChildElement("DeviceIdentity");
+    if (!deviceIdent) {
+        deviceIdent = appProcess->FirstChildElement("Device");
+    }
+    
+    if (deviceIdent) {
+        if (deviceIdent->Attribute("DeviceName")) {
+            info.deviceName = getAttribute(deviceIdent, "DeviceName");
+        }
+        if (deviceIdent->Attribute("VendorName")) {
+            info.deviceVendor = getAttribute(deviceIdent, "VendorName");
+        }
+        if (deviceIdent->Attribute("ID")) {
+            info.deviceID = getAttribute(deviceIdent, "ID");
         }
     }
     
-    if (xml.hasError()) {
-        return fallbackParseGSDML(gsdmlPath);
+    // Extract device access point
+    XMLElement* dapList = appProcess->FirstChildElement("DeviceAccessPointList");
+    if (dapList) {
+        XMLElement* dapItem = dapList->FirstChildElement("DeviceAccessPointItem");
+        if (dapItem) {
+            info.deviceAccessPointId = getAttribute(dapItem, "ID");
+        }
+    }
+    
+    // Extract modules
+    XMLElement* moduleList = appProcess->FirstChildElement("ModuleList");
+    if (moduleList) {
+        XMLElement* moduleItem = moduleList->FirstChildElement("ModuleItem");
+        while (moduleItem) {
+            ModuleInfo module;
+            module.id = getAttribute(moduleItem, "ID");
+            
+            QString identStr = getAttribute(moduleItem, "ModuleIdentNumber");
+            if (!identStr.isEmpty()) {
+                module.moduleIdentNumber = identStr.startsWith("0x") ? 
+                    identStr.mid(2).toUInt(nullptr, 16) : identStr.toUInt();
+            }
+            
+            // Module Info
+            XMLElement* modInfo = moduleItem->FirstChildElement("ModuleInfo");
+            if (modInfo) {
+                module.name = getAttribute(modInfo, "Name");
+            }
+            
+            // Virtual Submodules
+            XMLElement* vSubList = moduleItem->FirstChildElement("VirtualSubmoduleList");
+            if (vSubList) {
+                XMLElement* subItem = vSubList->FirstChildElement("VirtualSubmoduleItem");
+                while (subItem) {
+                    SubmoduleInfo submodule;
+                    submodule.id = getAttribute(subItem, "ID");
+                    
+                    QString subIdentStr = getAttribute(subItem, "SubmoduleIdentNumber");
+                    if (!subIdentStr.isEmpty()) {
+                        submodule.submoduleIdentNumber = subIdentStr.startsWith("0x") ?
+                            subIdentStr.mid(2).toUInt(nullptr, 16) : subIdentStr.toUInt();
+                    }
+                    
+                    XMLElement* smInfo = subItem->FirstChildElement("ModuleInfo");
+                    if (smInfo) {
+                        submodule.name = getAttribute(smInfo, "Name");
+                    }
+                    
+                    // Parse IOData
+                    XMLElement* ioData = subItem->FirstChildElement("IOData");
+                    if (ioData) {
+                        // Input
+                        XMLElement* input = ioData->FirstChildElement("Input");
+                        if (input) {
+                            int length = 0;
+                            XMLElement* dataItem = input->FirstChildElement("DataItem");
+                            while (dataItem) {
+                                length += getDataTypeLength(getAttribute(dataItem, "DataType"));
+                                dataItem = dataItem->NextSiblingElement("DataItem");
+                            }
+                            submodule.inputDataLength = length;
+                        }
+                        
+                        // Output
+                        XMLElement* output = ioData->FirstChildElement("Output");
+                        if (output) {
+                            int length = 0;
+                            XMLElement* dataItem = output->FirstChildElement("DataItem");
+                            while (dataItem) {
+                                length += getDataTypeLength(getAttribute(dataItem, "DataType"));
+                                dataItem = dataItem->NextSiblingElement("DataItem");
+                            }
+                            submodule.outputDataLength = length;
+                        }
+                    }
+                    
+                    module.submodules.append(submodule);
+                    subItem = subItem->NextSiblingElement("VirtualSubmoduleItem");
+                }
+            }
+            
+            info.modules.append(module);
+            moduleItem = moduleItem->NextSiblingElement("ModuleItem");
+        }
     }
     
     return info;

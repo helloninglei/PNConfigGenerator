@@ -1,4 +1,7 @@
 #include "XmlEntities.h"
+#include "../tinyxml2/tinyxml2.h"
+
+using namespace tinyxml2;
 
 namespace PNConfigLib {
 
@@ -24,95 +27,95 @@ void XmlObject::addBlobVariable(const QString& name, uint32_t aid, const QList<X
     variables.append(var);
 }
 
-QDomElement XmlEntitySerializer::serializeVariable(QDomDocument& doc, const XmlVariable& var)
+XMLElement* XmlEntitySerializer::serializeVariable(XMLDocument* doc, const XmlVariable& var)
 {
     // Special handling for Key
     if (var.name == "Key") {
-        QDomElement keyElem = doc.createElement("Key");
-        keyElem.setAttribute("AID", var.aid);
-        keyElem.appendChild(doc.createTextNode(var.value.toString()));
+        XMLElement* keyElem = doc->NewElement("Key");
+        keyElem->SetAttribute("AID", var.aid);
+        keyElem->SetText(var.value.toString().toStdString().c_str());
         return keyElem;
     }
     
     // Standard Variable
-    QDomElement elem = doc.createElement("Variable");
-    elem.setAttribute("Name", var.name);
+    XMLElement* elem = doc->NewElement("Variable");
+    elem->SetAttribute("Name", var.name.toStdString().c_str());
     
     // AID
-    QDomElement aidElem = doc.createElement("AID");
-    aidElem.appendChild(doc.createTextNode(QString::number(var.aid)));
-    elem.appendChild(aidElem);
+    XMLElement* aidElem = doc->NewElement("AID");
+    aidElem->SetText(QString::number(var.aid).toStdString().c_str());
+    elem->InsertEndChild(aidElem);
     
     // Value
-    QDomElement valElem = doc.createElement("Value");
-    valElem.setAttribute("Datatype", valueTypeToString(var.valueType));
-    valElem.setAttribute("Valuetype", dataTypeToString(var.dataType));
+    XMLElement* valElem = doc->NewElement("Value");
+    valElem->SetAttribute("Datatype", valueTypeToString(var.valueType).toStdString().c_str());
+    valElem->SetAttribute("Valuetype", dataTypeToString(var.dataType).toStdString().c_str());
     
     if (var.valueType == XmlValueType::Scalar) {
         QString strVal = var.value.toString();
         if (var.dataType == XmlDataType::BOOL) {
             strVal = var.value.toBool() ? "true" : "false";
         }
-        valElem.appendChild(doc.createTextNode(strVal));
+        valElem->SetText(strVal.toStdString().c_str());
     } else if (var.valueType == XmlValueType::SparseArray) {
         for (const auto& field : var.fields) {
-            QDomElement fieldElem = doc.createElement("Field");
-            fieldElem.setAttribute("Key", field.key);
-            fieldElem.setAttribute("Length", field.length);
-            fieldElem.appendChild(doc.createTextNode(field.value.toHex().toUpper()));
-            valElem.appendChild(fieldElem);
+            XMLElement* fieldElem = doc->NewElement("Field");
+            fieldElem->SetAttribute("Key", field.key);
+            fieldElem->SetAttribute("Length", field.length);
+            fieldElem->SetText(field.value.toHex().toUpper().toStdString().c_str());
+            valElem->InsertEndChild(fieldElem);
         }
     }
     
-    elem.appendChild(valElem);
+    elem->InsertEndChild(valElem);
     return elem;
 }
 
-QDomElement XmlEntitySerializer::serializeObject(QDomDocument& doc, const XmlObject& obj)
+XMLElement* XmlEntitySerializer::serializeObject(XMLDocument* doc, const XmlObject& obj)
 {
     // Special handling for Link Object (if we treat it as object)
     if (obj.name == "Link") {
-        QDomElement linkElem = doc.createElement("Link");
+        XMLElement* linkElem = doc->NewElement("Link");
         
         // Find AID
         for(const auto& var : obj.variables) {
             if(var.name == "AID") {
-                QDomElement aidElem = doc.createElement("AID");
-                aidElem.appendChild(doc.createTextNode(var.value.toString()));
-                linkElem.appendChild(aidElem);
+                XMLElement* aidElem = doc->NewElement("AID");
+                aidElem->SetText(var.value.toString().toStdString().c_str());
+                linkElem->InsertEndChild(aidElem);
             }
             if(var.name == "TargetRID") {
-                QDomElement tridElem = doc.createElement("TargetRID");
-                tridElem.appendChild(doc.createTextNode(var.value.toString()));
-                linkElem.appendChild(tridElem);
+                XMLElement* tridElem = doc->NewElement("TargetRID");
+                tridElem->SetText(var.value.toString().toStdString().c_str());
+                linkElem->InsertEndChild(tridElem);
             }
         }
         return linkElem;
     }
 
-    QDomElement elem = doc.createElement("Object");
-    elem.setAttribute("Name", obj.name);
+    XMLElement* elem = doc->NewElement("Object");
+    elem->SetAttribute("Name", obj.name.toStdString().c_str());
     
     // ClassRID
-    QDomElement classRidElem = doc.createElement("ClassRID");
-    classRidElem.appendChild(doc.createTextNode(QString::number(obj.classRid)));
-    elem.appendChild(classRidElem);
+    XMLElement* classRidElem = doc->NewElement("ClassRID");
+    classRidElem->SetText(QString::number(obj.classRid).toStdString().c_str());
+    elem->InsertEndChild(classRidElem);
     
     // RID (optional)
     if (obj.rid != 0) {
-        QDomElement ridElem = doc.createElement("RID");
-        ridElem.appendChild(doc.createTextNode(QString::number(obj.rid)));
-        elem.appendChild(ridElem);
+        XMLElement* ridElem = doc->NewElement("RID");
+        ridElem->SetText(QString::number(obj.rid).toStdString().c_str());
+        elem->InsertEndChild(ridElem);
     }
     
     // Variables
     for (const auto& var : obj.variables) {
-        elem.appendChild(serializeVariable(doc, var));
+        elem->InsertEndChild(serializeVariable(doc, var));
     }
     
     // Children
     for (const auto& child : obj.children) {
-        elem.appendChild(serializeObject(doc, child));
+        elem->InsertEndChild(serializeObject(doc, child));
     }
     
     return elem;

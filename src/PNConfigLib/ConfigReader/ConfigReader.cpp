@@ -3,55 +3,63 @@
 /*****************************************************************************/
 
 #include "ConfigReader.h"
+#include "tinyxml2/tinyxml2.h"
 #include <QFile>
-#include <QDomDocument>
-#include <QDomElement>
 #include <stdexcept>
+
+using namespace tinyxml2;
 
 namespace PNConfigLib {
 
+// Helper to safely get attribute as QString
+static QString getAttribute(XMLElement* element, const char* name, const QString& defaultValue = QString())
+{
+    if (!element) return defaultValue;
+    const char* val = element->Attribute(name);
+    return val ? QString(val) : defaultValue;
+}
+
 Configuration ConfigReader::parseConfiguration(const QString& configPath)
 {
-    QFile file(configPath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        throw std::runtime_error(QString("Failed to open configuration file: %1").arg(configPath).toStdString());
-    }
+    XMLDocument doc;
+    XMLError err = doc.LoadFile(configPath.toStdString().c_str());
     
-    QDomDocument doc;
-    QString errorMsg;
-    int errorLine, errorColumn;
-    if (!doc.setContent(&file, &errorMsg, &errorLine, &errorColumn)) {
-        throw std::runtime_error(QString("XML parse error at line %1, column %2: %3")
-            .arg(errorLine).arg(errorColumn).arg(errorMsg).toStdString());
+    if (err != XML_SUCCESS) {
+        throw std::runtime_error(QString("Failed to load configuration file: %1. Error: %2")
+            .arg(configPath).arg(doc.ErrorStr()).toStdString());
     }
     
     Configuration config;
     
-    QDomElement root = doc.documentElement();
-    config.configurationID = root.attribute("ConfigurationID");
-    config.configurationName = root.attribute("ConfigurationName");
-    config.listOfNodesRefID = root.attribute("ListOfNodesRefID");
-    config.schemaVersion = root.attribute("schemaVersion", "1.0");
+    XMLElement* root = doc.FirstChildElement("Configuration");
+    if (!root) {
+        throw std::runtime_error("Invalid configuration file: Missing root 'Configuration' element");
+    }
+
+    config.configurationID = getAttribute(root, "ConfigurationID");
+    config.configurationName = getAttribute(root, "ConfigurationName");
+    config.listOfNodesRefID = getAttribute(root, "ListOfNodesRefID");
+    config.schemaVersion = getAttribute(root, "schemaVersion", "1.0");
     
     // Parse Devices element
-    QDomElement devicesElem = root.firstChildElement("Devices");
-    if (devicesElem.isNull()) {
+    XMLElement* devicesElem = root->FirstChildElement("Devices");
+    if (!devicesElem) {
         throw std::runtime_error("Missing Devices element in Configuration");
     }
     
     // Parse CentralDevice
-    QDomElement centralElem = devicesElem.firstChildElement("CentralDevice");
-    if (!centralElem.isNull()) {
+    XMLElement* centralElem = devicesElem->FirstChildElement("CentralDevice");
+    if (centralElem) {
         parseCentralDevice(centralElem, config.centralDevice);
     }
     
     // Parse DecentralDevices
-    QDomElement decentralElem = devicesElem.firstChildElement("DecentralDevice");
-    while (!decentralElem.isNull()) {
+    XMLElement* decentralElem = devicesElem->FirstChildElement("DecentralDevice");
+    while (decentralElem) {
         DecentralDeviceType device;
         parseDecentralDevice(decentralElem, device);
         config.decentralDevices.append(device);
-        decentralElem = decentralElem.nextSiblingElement("DecentralDevice");
+        decentralElem = decentralElem->NextSiblingElement("DecentralDevice");
     }
     
     return config;
@@ -59,200 +67,199 @@ Configuration ConfigReader::parseConfiguration(const QString& configPath)
 
 ListOfNodes ConfigReader::parseListOfNodes(const QString& nodesPath)
 {
-    QFile file(nodesPath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        throw std::runtime_error(QString("Failed to open ListOfNodes file: %1").arg(nodesPath).toStdString());
-    }
+    XMLDocument doc;
+    XMLError err = doc.LoadFile(nodesPath.toStdString().c_str());
     
-    QDomDocument doc;
-    QString errorMsg;
-    int errorLine, errorColumn;
-    if (!doc.setContent(&file, &errorMsg, &errorLine, &errorColumn)) {
-        throw std::runtime_error(QString("XML parse error at line %1, column %2: %3")
-            .arg(errorLine).arg(errorColumn).arg(errorMsg).toStdString());
+    if (err != XML_SUCCESS) {
+        throw std::runtime_error(QString("Failed to load ListOfNodes file: %1. Error: %2")
+            .arg(nodesPath).arg(doc.ErrorStr()).toStdString());
     }
     
     ListOfNodes nodes;
     
-    QDomElement root = doc.documentElement();
-    nodes.listOfNodesID = root.attribute("ListOfNodesID");
-    nodes.schemaVersion = root.attribute("schemaVersion", "1.0");
+    XMLElement* root = doc.FirstChildElement("ListOfNodes");
+    if (!root) {
+        throw std::runtime_error("Invalid ListOfNodes file: Missing root 'ListOfNodes' element");
+    }
+
+    nodes.listOfNodesID = getAttribute(root, "ListOfNodesID");
+    nodes.schemaVersion = getAttribute(root, "schemaVersion", "1.0");
     
     // Parse PNDriver
-    QDomElement pnDriverElem = root.firstChildElement("PNDriver");
-    if (!pnDriverElem.isNull()) {
+    XMLElement* pnDriverElem = root->FirstChildElement("PNDriver");
+    if (pnDriverElem) {
         parsePNDriver(pnDriverElem, nodes.pnDriver);
     }
     
     // Parse DecentralDevices
-    QDomElement decentralElem = root.firstChildElement("DecentralDevice");
-    while (!decentralElem.isNull()) {
+    XMLElement* decentralElem = root->FirstChildElement("DecentralDevice");
+    while (decentralElem) {
         DecentralDeviceNode device;
         parseDecentralDeviceNode(decentralElem, device);
         nodes.decentralDevices.append(device);
-        decentralElem = decentralElem.nextSiblingElement("DecentralDevice");
+        decentralElem = decentralElem->NextSiblingElement("DecentralDevice");
     }
     
     return nodes;
 }
 
-void ConfigReader::parseCentralDevice(QDomElement& element, CentralDeviceType& device)
+void ConfigReader::parseCentralDevice(XMLElement* element, CentralDeviceType& device)
 {
-    device.deviceRefID = element.attribute("DeviceRefID");
+    device.deviceRefID = getAttribute(element, "DeviceRefID");
     
-    QDomElement interfaceElem = element.firstChildElement("CentralDeviceInterface");
-    if (!interfaceElem.isNull()) {
-        device.interfaceRefID = interfaceElem.attribute("InterfaceRefID");
+    XMLElement* interfaceElem = element->FirstChildElement("CentralDeviceInterface");
+    if (interfaceElem) {
+        device.interfaceRefID = getAttribute(interfaceElem, "InterfaceRefID");
         
-        QDomElement ethElem = interfaceElem.firstChildElement("EthernetAddresses");
-        if (!ethElem.isNull()) {
+        XMLElement* ethElem = interfaceElem->FirstChildElement("EthernetAddresses");
+        if (ethElem) {
             parseEthernetAddresses(ethElem, device.ethernetAddresses);
         }
         
         // Parse SendClock from AdvancedOptions
-        QDomElement advElem = interfaceElem.firstChildElement("AdvancedOptions");
-        if (!advElem.isNull()) {
-            QDomElement rtElem = advElem.firstChildElement("RealTimeSettings");
-            if (!rtElem.isNull()) {
-                QDomElement ioCommElem = rtElem.firstChildElement("IOCommunication");
-                if (!ioCommElem.isNull()) {
-                    device.sendClock = ioCommElem.attribute("SendClock", "1").toInt();
+        XMLElement* advElem = interfaceElem->FirstChildElement("AdvancedOptions");
+        if (advElem) {
+            XMLElement* rtElem = advElem->FirstChildElement("RealTimeSettings");
+            if (rtElem) {
+                XMLElement* ioCommElem = rtElem->FirstChildElement("IOCommunication");
+                if (ioCommElem) {
+                    device.sendClock = getAttribute(ioCommElem, "SendClock", "1").toInt();
                 }
             }
         }
     }
 }
 
-void ConfigReader::parseDecentralDevice(QDomElement& element, DecentralDeviceType& device)
+void ConfigReader::parseDecentralDevice(XMLElement* element, DecentralDeviceType& device)
 {
-    device.deviceRefID = element.attribute("DeviceRefID");
+    device.deviceRefID = getAttribute(element, "DeviceRefID");
     
-    QDomElement interfaceElem = element.firstChildElement("DecentralDeviceInterface");
-    if (!interfaceElem.isNull()) {
-        device.interfaceRefID = interfaceElem.attribute("InterfaceRefID");
+    XMLElement* interfaceElem = element->FirstChildElement("DecentralDeviceInterface");
+    if (interfaceElem) {
+        device.interfaceRefID = getAttribute(interfaceElem, "InterfaceRefID");
         
-        QDomElement ethElem = interfaceElem.firstChildElement("EthernetAddresses");
-        if (!ethElem.isNull()) {
+        XMLElement* ethElem = interfaceElem->FirstChildElement("EthernetAddresses");
+        if (ethElem) {
             parseEthernetAddresses(ethElem, device.ethernetAddresses);
         }
     }
     
     // Parse Modules
-    QDomElement moduleElem = element.firstChildElement("Module");
-    while (!moduleElem.isNull()) {
+    XMLElement* moduleElem = element->FirstChildElement("Module");
+    while (moduleElem) {
         ModuleType module;
         parseModule(moduleElem, module);
         device.modules.append(module);
-        moduleElem = moduleElem.nextSiblingElement("Module");
+        moduleElem = moduleElem->NextSiblingElement("Module");
     }
 }
 
-void ConfigReader::parseEthernetAddresses(QDomElement& element, EthernetAddresses& addresses)
+void ConfigReader::parseEthernetAddresses(XMLElement* element, EthernetAddresses& addresses)
 {
-    QDomElement ipElem = element.firstChildElement("IPProtocol");
-    if (!ipElem.isNull()) {
-        QDomElement setInProjectElem = ipElem.firstChildElement("SetInTheProject");
-        if (!setInProjectElem.isNull()) {
-            addresses.ipAddress = setInProjectElem.attribute("IPAddress");
-            addresses.subnetMask = setInProjectElem.attribute("SubnetMask", "255.255.255.0");
-            addresses.routerAddress = setInProjectElem.attribute("RouterAddress");
+    XMLElement* ipElem = element->FirstChildElement("IPProtocol");
+    if (ipElem) {
+        XMLElement* setInProjectElem = ipElem->FirstChildElement("SetInTheProject");
+        if (setInProjectElem) {
+            addresses.ipAddress = getAttribute(setInProjectElem, "IPAddress");
+            addresses.subnetMask = getAttribute(setInProjectElem, "SubnetMask", "255.255.255.0");
+            addresses.routerAddress = getAttribute(setInProjectElem, "RouterAddress");
         }
     }
     
-    QDomElement pnNameElem = element.firstChildElement("PROFINETDeviceName");
-    if (!pnNameElem.isNull()) {
-        addresses.deviceNumber = pnNameElem.attribute("DeviceNumber", "0").toInt();
+    XMLElement* pnNameElem = element->FirstChildElement("PROFINETDeviceName");
+    if (pnNameElem) {
+        addresses.deviceNumber = getAttribute(pnNameElem, "DeviceNumber", "0").toInt();
         
-        QDomElement nameTextElem = pnNameElem.firstChildElement("PNDeviceName");
-        if (!nameTextElem.isNull()) {
-            addresses.deviceName = nameTextElem.text();
+        XMLElement* nameTextElem = pnNameElem->FirstChildElement("PNDeviceName");
+        if (nameTextElem && nameTextElem->GetText()) {
+            addresses.deviceName = QString(nameTextElem->GetText());
         }
     }
 }
 
-void ConfigReader::parseModule(QDomElement& element, ModuleType& module)
+void ConfigReader::parseModule(XMLElement* element, ModuleType& module)
 {
-    module.moduleID = element.attribute("ModuleID");
-    module.slotNumber = element.attribute("SlotNumber").toInt();
-    module.gsdRefID = element.attribute("GSDRefID");
+    module.moduleID = getAttribute(element, "ModuleID");
+    module.slotNumber = getAttribute(element, "SlotNumber").toInt();
+    module.gsdRefID = getAttribute(element, "GSDRefID");
     
     // Parse Submodules
-    QDomElement submoduleElem = element.firstChildElement("Submodule");
-    while (!submoduleElem.isNull()) {
+    XMLElement* submoduleElem = element->FirstChildElement("Submodule");
+    while (submoduleElem) {
         SubmoduleType submodule;
         parseSubmodule(submoduleElem, submodule);
         module.submodules.append(submodule);
-        submoduleElem = submoduleElem.nextSiblingElement("Submodule");
+        submoduleElem = submoduleElem->NextSiblingElement("Submodule");
     }
 }
 
-void ConfigReader::parseSubmodule(QDomElement& element, SubmoduleType& submodule)
+void ConfigReader::parseSubmodule(XMLElement* element, SubmoduleType& submodule)
 {
-    submodule.submoduleID = element.attribute("SubmoduleID");
-    submodule.subslotNumber = element.attribute("SubslotNumber").toInt();
-    submodule.gsdRefID = element.attribute("GSDRefID");
+    submodule.submoduleID = getAttribute(element, "SubmoduleID");
+    submodule.subslotNumber = getAttribute(element, "SubslotNumber").toInt();
+    submodule.gsdRefID = getAttribute(element, "GSDRefID");
     
-    QDomElement ioElem = element.firstChildElement("IOAddresses");
-    if (!ioElem.isNull()) {
+    XMLElement* ioElem = element->FirstChildElement("IOAddresses");
+    if (ioElem) {
         parseIOAddresses(ioElem, submodule.ioAddresses);
     }
 }
 
-void ConfigReader::parseIOAddresses(QDomElement& element, IOAddresses& addresses)
+void ConfigReader::parseIOAddresses(XMLElement* element, IOAddresses& addresses)
 {
-    QDomElement inputElem = element.firstChildElement("InputAddresses");
-    if (!inputElem.isNull()) {
-        addresses.inputStartAddress = inputElem.attribute("StartAddress").toInt();
-        if (inputElem.hasAttribute("Length")) {
-            addresses.inputLength = inputElem.attribute("Length").toInt();
+    XMLElement* inputElem = element->FirstChildElement("InputAddresses");
+    if (inputElem) {
+        addresses.inputStartAddress = getAttribute(inputElem, "StartAddress").toInt();
+        if (inputElem->Attribute("Length")) {
+            addresses.inputLength = getAttribute(inputElem, "Length").toInt();
         }
     }
     
-    QDomElement outputElem = element.firstChildElement("OutputAddresses");
-    if (!outputElem.isNull()) {
-        addresses.outputStartAddress = outputElem.attribute("StartAddress").toInt();
-        if (outputElem.hasAttribute("Length")) {
-            addresses.outputLength = outputElem.attribute("Length").toInt();
+    XMLElement* outputElem = element->FirstChildElement("OutputAddresses");
+    if (outputElem) {
+        addresses.outputStartAddress = getAttribute(outputElem, "StartAddress").toInt();
+        if (outputElem->Attribute("Length")) {
+            addresses.outputLength = getAttribute(outputElem, "Length").toInt();
         }
     }
 }
 
-void ConfigReader::parsePNDriver(QDomElement& element, PNDriverType& driver)
+void ConfigReader::parsePNDriver(XMLElement* element, PNDriverType& driver)
 {
-    driver.deviceID = element.attribute("DeviceID");
-    driver.deviceName = element.attribute("DeviceName");
-    driver.deviceVersion = element.attribute("DeviceVersion");
+    driver.deviceID = getAttribute(element, "DeviceID");
+    driver.deviceName = getAttribute(element, "DeviceName");
+    driver.deviceVersion = getAttribute(element, "DeviceVersion");
     
-    QDomElement interfaceElem = element.firstChildElement("Interface");
-    while (!interfaceElem.isNull()) {
+    XMLElement* interfaceElem = element->FirstChildElement("Interface");
+    while (interfaceElem) {
         InterfaceType interface;
         parseInterface(interfaceElem, interface);
         driver.interfaces.append(interface);
-        interfaceElem = interfaceElem.nextSiblingElement("Interface");
+        interfaceElem = interfaceElem->NextSiblingElement("Interface");
     }
 }
 
-void ConfigReader::parseDecentralDeviceNode(QDomElement& element, DecentralDeviceNode& device)
+void ConfigReader::parseDecentralDeviceNode(XMLElement* element, DecentralDeviceNode& device)
 {
-    device.deviceID = element.attribute("DeviceID");
-    device.deviceName = element.attribute("DeviceName");
-    device.gsdPath = element.attribute("GSDPath");
-    device.gsdRefID = element.attribute("GSDRefID");
+    device.deviceID = getAttribute(element, "DeviceID");
+    device.deviceName = getAttribute(element, "DeviceName");
+    device.gsdPath = getAttribute(element, "GSDPath");
+    device.gsdRefID = getAttribute(element, "GSDRefID");
     
-    QDomElement interfaceElem = element.firstChildElement("Interface");
-    while (!interfaceElem.isNull()) {
+    XMLElement* interfaceElem = element->FirstChildElement("Interface");
+    while (interfaceElem) {
         InterfaceType interface;
         parseInterface(interfaceElem, interface);
         device.interfaces.append(interface);
-        interfaceElem = interfaceElem.nextSiblingElement("Interface");
+        interfaceElem = interfaceElem->NextSiblingElement("Interface");
     }
 }
 
-void ConfigReader::parseInterface(QDomElement& element, InterfaceType& interface)
+void ConfigReader::parseInterface(XMLElement* element, InterfaceType& interface)
 {
-    interface.interfaceID = element.attribute("InterfaceID");
-    interface.interfaceName = element.attribute("InterfaceName");
-    interface.interfaceType = element.attribute("InterfaceType");
+    interface.interfaceID = getAttribute(element, "InterfaceID");
+    interface.interfaceName = getAttribute(element, "InterfaceName");
+    interface.interfaceType = getAttribute(element, "InterfaceType");
 }
 
 } // namespace PNConfigLib

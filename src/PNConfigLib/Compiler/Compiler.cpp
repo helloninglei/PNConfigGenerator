@@ -7,11 +7,13 @@
 #include "RecordGenerators.h"
 #include "XmlEntities.h"
 #include "BlobBuilder.h"
+#include "../tinyxml2/tinyxml2.h"
 #include <QFile>
 #include <QTextStream>
-#include <QDomDocument>
 #include <QFileInfo>
 #include <stdexcept>
+
+using namespace tinyxml2;
 
 namespace PNConfigLib {
 
@@ -71,16 +73,6 @@ XmlObject buildPortObject(
     port.classRid = classRid;
     
     // Key
-    XmlField keyField; 
-    keyField.key = aidKey; 
-    // Key is technically a variable here in ref logic? 
-    // Ref: <Object Name="Port 1"><Key AID="2">32769</Key> ...
-    // NOTE: In our XmlEntities, Key is probably not represented as a standard variable?
-    // Wait, ref: <Key AID="2">32769</Key>. This is special.
-    // Our XmlObject doesn't have explicit Key support except QHash keys?
-    // Let's treat Key as a variable with specific name "Key" and AID=2?
-    // Actually, Ref XML: <Key AID="2">32769</Key>. This looks like a Variable named "Key" with AID=2.
-    // Let's try that.
     port.addScalar("Key", CompilerConstants::AID_Key, XmlDataType::UINT32, aidKey); // 32769 = 0x8001 (Port 1)
     
     // LADDR
@@ -104,12 +96,11 @@ QString Compiler::generateOutputXml(
     // Load GSDML data
     QHash<QString, GsdmlInfo> gsdmlData = loadGsdmlData(nodes);
     
-    QDomDocument doc;
+    XMLDocument doc;
     
     // XML Declaration
-    QDomProcessingInstruction xmlDecl = doc.createProcessingInstruction(
-        "xml", "version=\"1.0\" encoding=\"utf-8\"");
-    doc.appendChild(xmlDecl);
+    XMLDeclaration* decl = doc.NewDeclaration("xml version=\"1.0\" encoding=\"utf-8\"");
+    doc.InsertEndChild(decl);
     
     // Root: HWConfiguration
     XmlObject root;
@@ -149,23 +140,8 @@ QString Compiler::generateOutputXml(
     driverInterface.addBlobVariable("DataRecordsConf", CompilerConstants::AID_DataRecordsConf, ifRecords);
     
     // Link to IO System
-    XmlVariable linkVar;
-    linkVar.name = "Link";
-    linkVar.aid = CompilerConstants::AID_Link;
-    XmlField linkField;
-    linkField.key = 0; // Unused for Link?
-    linkField.length = 0;
-    // Link uses TargetRID in ref: <Link><TargetRID>...</TargetRID></Link>
-    // Our XmlVariable/XmlEntity might need extension for "Link" type if it's special.
-    // A Link in Ref looks like an Object? <Link><AID>16</AID><TargetRID>...</TargetRID></Link>
-    // It has AID=16. Let's treat it as a child object for now or custom variable serialization.
-    // For now, let's implement it as a special case in XmlEntities or just a child object named Link.
-    // Let's add it as a child object to simplify.
     XmlObject linkObj;
     linkObj.name = "Link";
-    
-    // Actually Ref: <Link><AID>16</AID><TargetRID>2296447237</TargetRID></Link>
-    // AID is added explicitly below as a variable.
     
     XmlVariable targetRidVar; 
     targetRidVar.name = "TargetRID";
@@ -231,13 +207,7 @@ QString Compiler::generateOutputXml(
     
     for (const DecentralDeviceType& dev : config.decentralDevices) {
         XmlObject devObj;
-        devObj.name = dev.ethernetAddresses.deviceName; // Or "PNet_Device"
         devObj.name = "PNet_Device"; // The Class name seems to be PNet_Device in ref
-        
-        // Add GSDML file reference (Variable? Or just implied?)
-        // Ref: <GSDMLFile>...</GSDMLFile>. Special Element.
-        // We can't support this easily with generic Object/Variable serializer.
-        // But let's proceed without it for a moment.
         
         devObj.classRid = CompilerConstants::ClassRID_Device;
         
@@ -272,14 +242,11 @@ QString Compiler::generateOutputXml(
     root.children.append(ioSystem);
     
     // Serialize Root
-    doc.appendChild(XmlEntitySerializer::serializeObject(doc, root));
+    doc.InsertEndChild(XmlEntitySerializer::serializeObject(&doc, root));
     
-    // Post-process to fix "Key" variables to <Key> elements?
-    // The current XmlEntitySerializer outputs: <Variable Name="Key"><Value ...>...</Value></Variable>
-    // The Ref has: <Key AID="2">32768</Key>
-    // This is a semantic difference. We might need to adjust the serializer to handle "Key" named scalar variables specially.
-    
-    return doc.toString(2);
+    XMLPrinter printer;
+    doc.Print(&printer);
+    return QString::fromUtf8(printer.CStr());
 }
 
 // -----------------------------------------------------------------------------

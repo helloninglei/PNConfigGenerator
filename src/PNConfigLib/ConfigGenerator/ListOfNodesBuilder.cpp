@@ -4,11 +4,12 @@
 
 #include "ListOfNodesBuilder.h"
 #include "../GsdmlParser/GsdmlParser.h"
+#include "../tinyxml2/tinyxml2.h"
 #include <QFile>
 #include <QTextStream>
-#include <QDomDocument>
-#include <QDomElement>
 #include <QFileInfo>
+
+using namespace tinyxml2;
 
 namespace PNConfigLib {
 
@@ -26,49 +27,50 @@ QString ListOfNodesBuilder::generateListOfNodesXml(
         gsdRefId = "IDD_1";
     }
     
-    QDomDocument doc;
+    XMLDocument doc;
     
     // XML declaration
-    QDomProcessingInstruction xmlDecl = doc.createProcessingInstruction(
-        "xml", "version=\"1.0\" encoding=\"utf-8\"");
-    doc.appendChild(xmlDecl);
+    XMLDeclaration* decl = doc.NewDeclaration("xml version=\"1.0\" encoding=\"utf-8\"");
+    doc.InsertEndChild(decl);
     
     // Root element with namespaces
-    QDomElement root = doc.createElement("ListOfNodes");
-    root.setAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
-    root.setAttribute("xmlns:xsd", "http://www.w3.org/2001/XMLSchema");
-    root.setAttribute("ListOfNodesID", "ListOfNodesID");
-    root.setAttribute("schemaVersion", "1.0");
-    root.setAttribute("xmlns", "http://www.siemens.com/Automation/PNConfigLib/ListOfNodes");
-    doc.appendChild(root);
+    XMLElement* root = doc.NewElement("ListOfNodes");
+    root->SetAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
+    root->SetAttribute("xmlns:xsd", "http://www.w3.org/2001/XMLSchema");
+    root->SetAttribute("ListOfNodesID", "ListOfNodesID");
+    root->SetAttribute("schemaVersion", "1.0");
+    root->SetAttribute("xmlns", "http://www.siemens.com/Automation/PNConfigLib/ListOfNodes");
+    doc.InsertEndChild(root);
     
     // PNDriver element (not CentralDevice!)
-    QDomElement pnDriver = doc.createElement("PNDriver");
-    pnDriver.setAttribute("DeviceID", masterNode.name + "_ID");
-    pnDriver.setAttribute("DeviceName", masterNode.name);
-    pnDriver.setAttribute("DeviceVersion", "v3.1");
-    root.appendChild(pnDriver);
+    XMLElement* pnDriver = doc.NewElement("PNDriver");
+    pnDriver->SetAttribute("DeviceID", (masterNode.name + "_ID").toStdString().c_str());
+    pnDriver->SetAttribute("DeviceName", masterNode.name.toStdString().c_str());
+    pnDriver->SetAttribute("DeviceVersion", "v3.1");
+    root->InsertEndChild(pnDriver);
     
-    QDomElement masterInterface = doc.createElement("Interface");
-    masterInterface.setAttribute("InterfaceID", masterNode.name + "_Interface");
-    masterInterface.setAttribute("InterfaceName", masterNode.name + "_Interface");
-    masterInterface.setAttribute("InterfaceType", "Linux Native");
-    pnDriver.appendChild(masterInterface);
+    XMLElement* masterInterface = doc.NewElement("Interface");
+    masterInterface->SetAttribute("InterfaceID", (masterNode.name + "_Interface").toStdString().c_str());
+    masterInterface->SetAttribute("InterfaceName", (masterNode.name + "_Interface").toStdString().c_str());
+    masterInterface->SetAttribute("InterfaceType", "Linux Native");
+    pnDriver->InsertEndChild(masterInterface);
     
     // DecentralDevice element
-    QDomElement decentralDevice = doc.createElement("DecentralDevice");
-    decentralDevice.setAttribute("DeviceID", slaveNode.name + "_ID");
-    decentralDevice.setAttribute("GSDPath", QFileInfo(gsdmlPath).absoluteFilePath());
-    decentralDevice.setAttribute("GSDRefID", gsdRefId);
-    decentralDevice.setAttribute("DeviceName", slaveNode.name);
-    root.appendChild(decentralDevice);
+    XMLElement* decentralDevice = doc.NewElement("DecentralDevice");
+    decentralDevice->SetAttribute("DeviceID", (slaveNode.name + "_ID").toStdString().c_str());
+    decentralDevice->SetAttribute("GSDPath", QFileInfo(gsdmlPath).absoluteFilePath().toStdString().c_str());
+    decentralDevice->SetAttribute("GSDRefID", gsdRefId.toStdString().c_str());
+    decentralDevice->SetAttribute("DeviceName", slaveNode.name.toStdString().c_str());
+    root->InsertEndChild(decentralDevice);
     
-    QDomElement slaveInterface = doc.createElement("Interface");
-    slaveInterface.setAttribute("InterfaceID", slaveNode.name + "_Interface");
-    slaveInterface.setAttribute("InterfaceName", slaveNode.name + "_Interface");
-    decentralDevice.appendChild(slaveInterface);
+    XMLElement* slaveInterface = doc.NewElement("Interface");
+    slaveInterface->SetAttribute("InterfaceID", (slaveNode.name + "_Interface").toStdString().c_str());
+    slaveInterface->SetAttribute("InterfaceName", (slaveNode.name + "_Interface").toStdString().c_str());
+    decentralDevice->InsertEndChild(slaveInterface);
     
-    return doc.toString(2); // Indent with 2 spaces
+    XMLPrinter printer;
+    doc.Print(&printer);
+    return QString::fromUtf8(printer.CStr());
 }
 
 bool ListOfNodesBuilder::saveListOfNodesXml(

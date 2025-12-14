@@ -7,7 +7,10 @@
 
 #include "ConfigurationSchema.h"
 #include <QString>
-#include <QDomElement>
+
+namespace tinyxml2 {
+class XMLElement;
+}
 
 namespace PNConfigLib {
 
@@ -35,15 +38,15 @@ public:
     static ListOfNodes parseListOfNodes(const QString& nodesPath);
     
 private:
-    static void parseCentralDevice(QDomElement& element, CentralDeviceType& device);
-    static void parseDecentralDevice(QDomElement& element, DecentralDeviceType& device);
-    static void parseEthernetAddresses(QDomElement& element, EthernetAddresses& addresses);
-    static void parseModule(QDomElement& element, ModuleType& module);
-    static void parseSubmodule(QDomElement& element, SubmoduleType& submodule);
-    static void parseIOAddresses(QDomElement& element, IOAddresses& addresses);
-    static void parsePNDriver(QDomElement& element, PNDriverType& driver);
-    static void parseDecentralDeviceNode(QDomElement& element, DecentralDeviceNode& device);
-    static void parseInterface(QDomElement& element, InterfaceType& interface);
+    static void parseCentralDevice(tinyxml2::XMLElement* element, CentralDeviceType& device);
+    static void parseDecentralDevice(tinyxml2::XMLElement* element, DecentralDeviceType& device);
+    static void parseEthernetAddresses(tinyxml2::XMLElement* element, EthernetAddresses& addresses);
+    static void parseModule(tinyxml2::XMLElement* element, ModuleType& module);
+    static void parseSubmodule(tinyxml2::XMLElement* element, SubmoduleType& submodule);
+    static void parseIOAddresses(tinyxml2::XMLElement* element, IOAddresses& addresses);
+    static void parsePNDriver(tinyxml2::XMLElement* element, PNDriverType& driver);
+    static void parseDecentralDeviceNode(tinyxml2::XMLElement* element, DecentralDeviceNode& device);
+    static void parseInterface(tinyxml2::XMLElement* element, InterfaceType& interface);
 };
 
 } // namespace PNConfigLib

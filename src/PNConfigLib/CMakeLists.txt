@@ -47,12 +47,15 @@ add_library(PNConfigLib STATIC
     Consistency/InputValidator.cpp
     Consistency/ConsistencyManager.h
     Consistency/ConsistencyManager.cpp
+
+    # TinyXML2
+    tinyxml2/tinyxml2.h
+    tinyxml2/tinyxml2.cpp
 )
 
 target_link_libraries(PNConfigLib
     PUBLIC
         Qt6::Core
-        Qt6::Xml
 )
 
 target_include_directories(PNConfigLib
