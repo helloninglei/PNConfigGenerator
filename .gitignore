@@ -1,0 +1,57 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+*.cmake
+!CMakeLists.txt
+Makefile
+cmake_install.cmake
+install_manifest.txt
+
+# Qt
+*.pro.user
+*.qrc.depends
+*.autosave
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qm
+
+# C++
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+*.a
+*.lib
+
+# IDE
+# .vscode/ - Allow VSCode config for development
+.idea/
+*.suo
+*.user
+*.sln.docstates
+.vs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*~
+*.swp
+*.swo
+*.tmp
+
+# Logs
+*.log
+example

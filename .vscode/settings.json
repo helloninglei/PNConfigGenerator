@@ -1,0 +1,30 @@
+{
+    "files.associations": {
+        "*.h": "cpp",
+        "*.cpp": "cpp",
+        "CMakeLists.txt": "cmake"
+    },
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.configureOnOpen": true,
+    "cmake.generator": "Visual Studio 17 2022",
+    "editor.formatOnSave": false,
+    "files.encoding": "utf8",
+    "files.eol": "\n",
+    "[cpp]": {
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true,
+        "editor.detectIndentation": false
+    },
+    "[cmake]": {
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true
+    },
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.default.cppStandard": "c++17",
+    "C_Cpp.default.compilerPath": "",
+    "cmake.configureSettings": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+    }
+}
