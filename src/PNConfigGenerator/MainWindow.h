@@ -26,6 +26,8 @@ private slots:
     void onImportGSD();
     void onQuickSetupWizard();
     void onGenerateConfiguration();
+    void onOpenConfiguration();
+    void onGenerateOutput();
     void onAbout();
 
 private:
@@ -36,6 +38,11 @@ private:
     void setupConnections();
     
     Ui::MainWindow *ui;
+    
+    // Configuration loading state
+    QString m_loadedConfigPath;
+    QString m_loadedListOfNodesPath;
+    bool m_configurationLoaded = false;
 };
 
 #endif // MAINWINDOW_H
