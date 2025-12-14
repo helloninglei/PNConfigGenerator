@@ -20,6 +20,8 @@
 #include <QStandardPaths>
 #include <QProcess>
 #include <QDir>
+#include <QDateTime>
+#include <QCoreApplication>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -43,8 +45,21 @@ void MainWindow::setupUi()
     setWindowTitle("PNConfigGenerator - PROFINET Device Configuration Tool");
     resize(900, 700);
     
-    // Set default output path
-    QString defaultOutput = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation) + "/PNConfig_Output";
+    // Set default output path to project root/results with timestamp subdirectory
+    QString appDir = QCoreApplication::applicationDirPath();
+    // Navigate from bin folder to project root
+    QDir projectDir(appDir);
+    projectDir.cdUp(); // Go up from bin to build or project root
+    if (projectDir.dirName() == "bin") {
+        projectDir.cdUp();
+    }
+    if (projectDir.dirName() == "build") {
+        projectDir.cdUp();
+    }
+    
+    // Create results directory with timestamp
+    QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+    QString defaultOutput = projectDir.absolutePath() + "/results/" + timestamp;
     ui->outputPathEdit->setText(defaultOutput);
     
     // Status bar
@@ -196,8 +211,8 @@ void MainWindow::onGenerateConfiguration()
         slaveConfig.name = slaveName;
         slaveConfig.ipAddress = slaveIP;
         slaveConfig.routerIpAddress = ui->slaveRouterEdit->text().trimmed();
-        slaveConfig.inputStartAddress = 0;
-        slaveConfig.outputStartAddress = 0;
+        slaveConfig.inputStartAddress = ui->inputStartEdit->text().trimmed().toInt();
+        slaveConfig.outputStartAddress = ui->outputStartEdit->text().trimmed().toInt();
         
         bool success = PNConfigLib::ConfigurationBuilder::saveConfigurationXml(
             gsdmlPath, masterConfig, slaveConfig, configPath);
