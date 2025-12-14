@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Object Name="HWConfiguration">
+  <ClassRID>1</ClassRID>
+  <Object Name="Windows_PNDriver">
+    <ClassRID>2</ClassRID>
+    <Variable Name="DataRecordsConf">
+      <AID>17</AID>
+      <Value Datatype="SparseArray" Valuetype="BLOB"/>
+    </Variable>
+    <Object Name="PN_Driver_Windows_Interface">
+      <ClassRID>3</ClassRID>
+      <Key AID="2">32768</Key>
+      <Variable Name="LADDR">
+        <AID>10</AID>
+        <Value Datatype="Scalar" Valuetype="UINT16">259</Value>
+      </Variable>
+      <Variable Name="DataRecordsConf">
+        <AID>11</AID>
+        <Value Datatype="SparseArray" Valuetype="BLOB">
+          <Field Key="4096" Length="20">3000001001000000C0A80101FFFFFF00C0A80164</Field>
+          <Field Key="4099" Length="22">A20100100100000000090000706E6472697665723100</Field>
+          <Field Key="4097" Length="12">300600080101000000000000</Field>
+          <Field Key="4100" Length="12">300900080101000000000000</Field>
+          <Field Key="32881" Length="12">025000080100000000000001</Field>
+          <Field Key="65536" Length="12">F00000080100040000030000</Field>
+        </Value>
+      </Variable>
+      <Link>
+        <TargetRID>2296447237</TargetRID>
+        <AID>16</AID>
+      </Link>
+    </Object>
+    <Object Name="Port 1">
+      <ClassRID>4</ClassRID>
+      <Key AID="2">32769</Key>
+      <Variable Name="LADDR">
+        <AID>10</AID>
+        <Value Datatype="Scalar" Valuetype="UINT16">260</Value>
+      </Variable>
+      <Variable Name="DataRecordsConf">
+        <AID>11</AID>
+        <Value Datatype="SparseArray" Valuetype="BLOB"/>
+      </Variable>
+    </Object>
+  </Object>
+  <Object Name="PROFINET IO-System">
+    <ClassRID>5</ClassRID>
+    <RID>2296447237</RID>
+    <Variable Name="LADDR">
+      <AID>10</AID>
+      <Value Datatype="Scalar" Valuetype="UINT16">261</Value>
+    </Variable>
+    <Variable Name="IOsysParamConfig">
+      <AID>15</AID>
+      <Value Datatype="SparseArray" Valuetype="BLOB">
+        <Field Key="12352" Length="20">3040001001010000002A000800640258012C0000</Field>
+      </Value>
+    </Variable>
+    <Object Name="Network Parameters">
+      <ClassRID>11</ClassRID>
+      <Variable Name="NetworkParamConfig">
+        <AID>12</AID>
+        <Value Datatype="SparseArray" Valuetype="BLOB">
+          <Field Key="4096" Length="20">3000001001000000C0A80101FFFFFF00C0A80101</Field>
+          <Field Key="4099" Length="22">A20100100100000000090000706E6472697665723100</Field>
+          <Field Key="4103" Length="12">301100080101000000000000</Field>
+        </Value>
+      </Variable>
+    </Object>
+    <Object Name="PNet_Device">
+      <ClassRID>7</ClassRID>
+      <Key AID="3">1</Key>
+      <Variable Name="DeactivatedConfig">
+        <AID>4</AID>
+        <Value Datatype="Scalar" Valuetype="BOOL">false</Value>
+      </Variable>
+      <Variable Name="LADDR">
+        <AID>10</AID>
+        <Value Datatype="Scalar" Valuetype="UINT16">264</Value>
+      </Variable>
+      <Variable Name="IODevParamConfig">
+        <AID>13</AID>
+        <Value Datatype="SparseArray" Valuetype="BLOB">
+          <Field Key="12546" Length="0"></Field>
+        </Value>
+      </Variable>
+      <Object Name="PNet_Device_Interface">
+        <ClassRID>9</ClassRID>
+        <Variable Name="LADDR">
+          <AID>10</AID>
+          <Value Datatype="Scalar" Valuetype="UINT16">265</Value>
+        </Variable>
+      </Object>
+    </Object>
+  </Object>
+</Object>

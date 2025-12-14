@@ -28,6 +28,13 @@ add_library(PNConfigLib STATIC
     Compiler/Compiler.cpp
     Compiler/XmlSerializer.h
     Compiler/XmlSerializer.cpp
+    Compiler/BlobBuilder.h
+    Compiler/BlobBuilder.cpp
+    Compiler/XmlEntities.h
+    Compiler/XmlEntities.cpp
+    Compiler/RecordGenerators.h
+    Compiler/RecordGenerators.cpp
+    Compiler/CompilerConstants.h
     
     # Project Manager (stub)
     ProjectManager/ProjectManager.h

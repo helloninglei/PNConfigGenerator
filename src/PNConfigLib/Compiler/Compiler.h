@@ -7,6 +7,7 @@
 
 #include "../ConfigReader/ConfigurationSchema.h"
 #include "../GsdmlParser/GsdmlParser.h"
+#include "XmlEntities.h"
 #include <QString>
 #include <QHash>
 

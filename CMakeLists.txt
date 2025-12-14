@@ -25,6 +25,7 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 # Add subdirectories
 add_subdirectory(src/PNConfigLib)
 add_subdirectory(src/PNConfigGenerator)
+add_subdirectory(src/Verifier)
 
 # Optional: Enable testing
 option(BUILD_TESTING "Build tests" OFF)

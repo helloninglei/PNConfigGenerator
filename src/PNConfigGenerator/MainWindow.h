@@ -20,14 +20,13 @@ public:
     ~MainWindow();
 
 private slots:
-    void onNewProject();
-    void onOpenProject();
-    void onSaveProject();
-    void onImportGSD();
+    void onOpenProjectFolder();
+    
+    // Tools menu actions
     void onQuickSetupWizard();
-    void onGenerateConfiguration();
-    void onOpenConfiguration();
     void onGenerateOutput();
+    
+    // Help menu actions
     void onAbout();
 
 private:
