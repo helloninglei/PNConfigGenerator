@@ -186,19 +186,6 @@ QString Compiler::generateOutputXml(
     
     ioSystem.addBlobVariable("IOsysParamConfig", CompilerConstants::AID_IOsysParamConfig, ioParamRecords);
     
-    // Network Parameters Object
-    XmlObject netParams;
-    netParams.name = "Network Parameters";
-    netParams.classRid = CompilerConstants::ClassRID_NetworkParameters;
-    
-    QList<XmlField> netRecs = RecordGenerators::generateNetworkParameters(
-        config.centralDevice.ethernetAddresses.ipAddress,
-        config.centralDevice.ethernetAddresses.subnetMask,
-        config.centralDevice.ethernetAddresses.deviceName
-    );
-    netParams.addBlobVariable("NetworkParamConfig", CompilerConstants::AID_NetworkParamConfig, netRecs);
-    ioSystem.children.append(netParams);
-    
     // -------------------------------------------------------------------------
     // 3. Decentralized Devices
     // -------------------------------------------------------------------------
@@ -232,6 +219,19 @@ QString Compiler::generateOutputXml(
         devInterface.classRid = CompilerConstants::ClassRID_Device_Interface;
         devInterface.addScalar("LADDR", CompilerConstants::AID_LADDR, XmlDataType::UINT16, currentLaddr++);
         devObj.children.append(devInterface);
+        
+        // Network Parameters Object (Child of PNet_Device)
+        XmlObject netParams;
+        netParams.name = "Network Parameters";
+        netParams.classRid = CompilerConstants::ClassRID_NetworkParameters;
+        
+        QList<XmlField> netRecs = RecordGenerators::generateNetworkParameters(
+            dev.ethernetAddresses.ipAddress,
+            dev.ethernetAddresses.subnetMask,
+            dev.ethernetAddresses.deviceName
+        );
+        netParams.addBlobVariable("NetworkParamConfig", CompilerConstants::AID_NetworkParamConfig, netRecs);
+        devObj.children.append(netParams);
         
         ioSystem.children.append(devObj);
         

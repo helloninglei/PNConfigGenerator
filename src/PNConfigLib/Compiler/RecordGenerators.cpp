@@ -241,10 +241,12 @@ QList<XmlField> RecordGenerators::generateDriverInterfaceRecords(
     fExp.length = fExp.value.size();
     fields.append(fExp);
     
-    // 7. Unknown 45169 (0xB071) - From first example variable
-    // Ref: F003 0018 0200 0000 0002 0607 7075626C6963 0000 70726976617465 00
-    // "public" .. "private" -> SNMP Communities?
-    // Let's omit for now unless essential.
+    // 7. Unknown 45169 (0xB071) - SNMP Communities or similar
+    XmlField f7;
+    f7.key = CompilerConstants::Key_Unknown45169;
+    f7.value = QByteArray::fromHex("F003001802000000000206077075626C696300007072697661746500");
+    f7.length = f7.value.size();
+    fields.append(f7);
     
     return fields;
 }
