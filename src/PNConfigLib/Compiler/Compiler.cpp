@@ -197,6 +197,14 @@ QString Compiler::generateOutputXml(
         
         devObj.classRid = CompilerConstants::ClassRID_Device;
         
+        // Set GSDML filename from nodes if available
+        for (const DecentralDeviceNode& node : nodes.decentralDevices) {
+            if (node.deviceID == dev.deviceRefID && !node.gsdPath.isEmpty()) {
+                devObj.gsdmlFile = QFileInfo(node.gsdPath).fileName();
+                break;
+            }
+        }
+        
         // Key 3:1 (Device ID?)
         devObj.addScalar("Key", 3, XmlDataType::UINT32, 1); 
         
