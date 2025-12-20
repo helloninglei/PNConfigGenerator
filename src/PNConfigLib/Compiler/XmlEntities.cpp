@@ -13,6 +13,9 @@ void XmlObject::addScalar(const QString& name, uint32_t aid, XmlDataType type, c
     var.valueType = XmlValueType::Scalar;
     var.dataType = type;
     var.value = val;
+    if (type == XmlDataType::BLOB) {
+        var.scalarBlobLength = val.toByteArray().size();
+    }
     variables.append(var);
 }
 

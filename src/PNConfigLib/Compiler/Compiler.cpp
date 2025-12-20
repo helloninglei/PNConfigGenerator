@@ -82,6 +82,9 @@ XmlObject buildPortObject(
     QList<XmlField> emptyRecords;
     port.addBlobVariable("DataRecordsConf", CompilerConstants::AID_DataRecordsConf, emptyRecords);
     
+    // DataRecordsTransferSequence (Scalar)
+    port.addScalar("DataRecordsTransferSequence", CompilerConstants::AID_DataRecordsTransferSequence, XmlDataType::BLOB, QByteArray());
+    
     return port;
 }
 
@@ -245,13 +248,42 @@ QString Compiler::generateOutputXml(
         XmlObject subDevObj;
         subDevObj.name = "PNet_Device";
         subDevObj.classRid = CompilerConstants::ClassRID_Device;
+        subDevObj.addScalar("Key", 3, XmlDataType::UINT32, 1);
 
-        // PNet_Device_Interface (Child of Level 2 PNet_Device)
+        // 1. Dual Nested PNet_Device (Level 3)
+        for (int i = 0; i < 2; ++i) {
+            XmlObject subDevObj3;
+            subDevObj3.name = "PNet_Device";
+            subDevObj3.classRid = CompilerConstants::ClassRID_Device;
+            subDevObj3.addScalar("Key", CompilerConstants::AID_Key, XmlDataType::UINT32, i + 1);
+            
+            // Add required variables
+            subDevObj3.addScalar("LADDR", CompilerConstants::AID_LADDR, XmlDataType::UINT16, currentLaddr++);
+            
+            QList<XmlField> emptyRecords;
+            subDevObj3.addBlobVariable("DataRecordsConf", CompilerConstants::AID_DataRecordsConf, emptyRecords);
+            
+            // DataRecordsTransferSequence (Scalar)
+            subDevObj3.addScalar("DataRecordsTransferSequence", CompilerConstants::AID_DataRecordsTransferSequence, XmlDataType::BLOB, QByteArray());
+            
+            subDevObj.children.append(subDevObj3);
+        }
+
+        // 2. PNet_Device_Interface (Child of Level 2 PNet_Device)
         XmlObject devInterface;
         devInterface.name = "PNet_Device_Interface";
         devInterface.classRid = CompilerConstants::ClassRID_Device_Interface;
+        devInterface.addScalar("Key", CompilerConstants::AID_Key, XmlDataType::UINT32, 32768);
         devInterface.addScalar("LADDR", CompilerConstants::AID_LADDR, XmlDataType::UINT16, currentLaddr++);
+        
+        QList<XmlField> emptyVars;
+        devInterface.addBlobVariable("DataRecordsConf", CompilerConstants::AID_DataRecordsConf, emptyVars);
+        devInterface.addScalar("DataRecordsTransferSequence", CompilerConstants::AID_DataRecordsTransferSequence, XmlDataType::BLOB, QByteArray());
         subDevObj.children.append(devInterface);
+
+        // 3. Port 1 (Child of Level 2 PNet_Device)
+        XmlObject port1 = buildPortObject(1, 0x8001, currentLaddr++, CompilerConstants::ClassRID_Port);
+        subDevObj.children.append(port1);
 
         devObj.children.append(subDevObj);
         
