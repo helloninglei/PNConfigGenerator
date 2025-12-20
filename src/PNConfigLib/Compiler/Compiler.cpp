@@ -211,22 +211,22 @@ QString Compiler::generateOutputXml(
         devObj.addScalar("DeactivatedConfig", CompilerConstants::AID_DeactivatedConfig, XmlDataType::BOOL, false);
         devObj.addScalar("LADDR", CompilerConstants::AID_LADDR, XmlDataType::UINT16, currentLaddr++);
         
-        // IODevParamConfig (The big one)
-        XmlField emptyBigField; emptyBigField.key=12546; emptyBigField.length=0; 
-        QList<XmlField> ioDevRecords;
-        ioDevRecords.append(emptyBigField);
-        // Note: Real implementation would generate this
+        // IODevParamConfig (PROFINET device parameter records)
+        GsdmlInfo gsdInfo;
+        if (gsdmlData.contains(dev.deviceRefID)) {
+            gsdInfo = gsdmlData[dev.deviceRefID];
+        }
+        
+        QList<XmlField> ioDevRecords = RecordGenerators::generateIODevParamConfig(
+            dev,
+            gsdInfo,
+            dev.ethernetAddresses.deviceName,
+            dev.ethernetAddresses.ipAddress
+        );
         devObj.addBlobVariable("IODevParamConfig", CompilerConstants::AID_IODevParamConfig, ioDevRecords);
         
         // Device Interface & Ports
         // Simplified hierarchy: Device -> Device Interface -> Ports
-        
-        // PNet_Device_Interface
-        XmlObject devInterface;
-        devInterface.name = "PNet_Device_Interface";
-        devInterface.classRid = CompilerConstants::ClassRID_Device_Interface;
-        devInterface.addScalar("LADDR", CompilerConstants::AID_LADDR, XmlDataType::UINT16, currentLaddr++);
-        devObj.children.append(devInterface);
         
         // Network Parameters Object (Child of PNet_Device)
         XmlObject netParams;
@@ -240,6 +240,20 @@ QString Compiler::generateOutputXml(
         );
         netParams.addBlobVariable("NetworkParamConfig", CompilerConstants::AID_NetworkParamConfig, netRecs);
         devObj.children.append(netParams);
+
+        // Nested PNet_Device (Level 2)
+        XmlObject subDevObj;
+        subDevObj.name = "PNet_Device";
+        subDevObj.classRid = CompilerConstants::ClassRID_Device;
+
+        // PNet_Device_Interface (Child of Level 2 PNet_Device)
+        XmlObject devInterface;
+        devInterface.name = "PNet_Device_Interface";
+        devInterface.classRid = CompilerConstants::ClassRID_Device_Interface;
+        devInterface.addScalar("LADDR", CompilerConstants::AID_LADDR, XmlDataType::UINT16, currentLaddr++);
+        subDevObj.children.append(devInterface);
+
+        devObj.children.append(subDevObj);
         
         ioSystem.children.append(devObj);
         
