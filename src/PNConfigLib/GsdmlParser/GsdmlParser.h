@@ -47,6 +47,9 @@ struct GsdmlInfo {
     QString deviceVendor;
     QString deviceID;
     QString deviceAccessPointId;
+    uint32_t vendorId = 0;      // Numeric vendor ID from GSDML
+    uint32_t deviceId = 0;      // Numeric device ID from GSDML
+    uint32_t dapModuleId = 0;   // DAP ModuleIdentNumber
     QVector<ModuleInfo> modules;
     QDateTime lastModified;
 };

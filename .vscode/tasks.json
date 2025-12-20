@@ -73,6 +73,53 @@
             ],
             "group": "build",
             "problemMatcher": []
+        },
+                {
+            "label": "compile_controller",
+            "type": "shell",
+            "command": "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe",
+            "args": [
+                "${workspaceFolder}/example/pn_driver/src/examples/ioc/test_app/win32/test_app.sln",
+                "/p:Configuration=Release",
+                "/p:Platform=Win32"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "new"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "clean_controller",
+            "type": "shell",
+            "command": "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe",
+            "args": [
+                "${workspaceFolder}/example/pn_driver/src/examples/ioc/test_app/win32/test_app.sln",
+                "/t:Clean",
+                "/p:Configuration=Release",
+                "/p:Platform=Win32"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build-controller",
+            "dependsOn": ["clean_controller", "compile_controller"],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
         }
     ]
 }

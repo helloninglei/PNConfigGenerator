@@ -29,6 +29,20 @@
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "preLaunchTask": "CMake: Build Release"
+        },
+        {
+            "name": "DebugController",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/example/pn_driver/src/examples/ioc/test_app/Release/test_app.exe",
+            "args": [
+                "-f",
+                // "${workspaceFolder}/results/20251214_231733/PROFINET_Driver_Output.xml"
+                "${workspaceFolder}/example/config_files/PNConfigLib_Output/PROFINET Driver_PN_Driver_Windows.xml"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "externalTerminal",
+            "preLaunchTask": "build-controller"
         }
     ]
 }

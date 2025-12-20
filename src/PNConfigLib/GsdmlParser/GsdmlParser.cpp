@@ -103,26 +103,31 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
     XMLElement* profileBody = root->FirstChildElement("ProfileBody");
     if (!profileBody) return fallbackParseGSDML(gsdmlPath);
     
+    // Extract Device Identity (directly under ProfileBody, NOT ApplicationProcess!)
+    XMLElement* deviceIdent = profileBody->FirstChildElement("DeviceIdentity");
+    if (deviceIdent) {
+        // Extract VendorID and DeviceID hex values
+        QString vendorIdStr = getAttribute(deviceIdent, "VendorID");
+        QString deviceIdStr = getAttribute(deviceIdent, "DeviceID");
+        
+        if (!vendorIdStr.isEmpty()) {
+            info.vendorId = vendorIdStr.startsWith("0x") ?
+                vendorIdStr.mid(2).toUInt(nullptr, 16) : vendorIdStr.toUInt();
+        }
+        if (!deviceIdStr.isEmpty()) {
+            info.deviceId = deviceIdStr.startsWith("0x") ?
+                deviceIdStr.mid(2).toUInt(nullptr, 16) : deviceIdStr.toUInt();
+        }
+        
+        // Extract vendor name
+        XMLElement* vendorName = deviceIdent->FirstChildElement("VendorName");
+        if (vendorName) {
+            info.deviceVendor = getAttribute(vendorName, "Value");
+        }
+    }
+    
     XMLElement* appProcess = profileBody->FirstChildElement("ApplicationProcess");
     if (!appProcess) return fallbackParseGSDML(gsdmlPath);
-    
-    // Extract device information
-    XMLElement* deviceIdent = appProcess->FirstChildElement("DeviceIdentity");
-    if (!deviceIdent) {
-        deviceIdent = appProcess->FirstChildElement("Device");
-    }
-    
-    if (deviceIdent) {
-        if (deviceIdent->Attribute("DeviceName")) {
-            info.deviceName = getAttribute(deviceIdent, "DeviceName");
-        }
-        if (deviceIdent->Attribute("VendorName")) {
-            info.deviceVendor = getAttribute(deviceIdent, "VendorName");
-        }
-        if (deviceIdent->Attribute("ID")) {
-            info.deviceID = getAttribute(deviceIdent, "ID");
-        }
-    }
     
     // Extract device access point
     XMLElement* dapList = appProcess->FirstChildElement("DeviceAccessPointList");
@@ -130,6 +135,13 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
         XMLElement* dapItem = dapList->FirstChildElement("DeviceAccessPointItem");
         if (dapItem) {
             info.deviceAccessPointId = getAttribute(dapItem, "ID");
+            
+            // Extract DAP ModuleIdentNumber
+            QString dapModuleIdStr = getAttribute(dapItem, "ModuleIdentNumber");
+            if (!dapModuleIdStr.isEmpty()) {
+                info.dapModuleId = dapModuleIdStr.startsWith("0x") ?
+                    dapModuleIdStr.mid(2).toUInt(nullptr, 16) : dapModuleIdStr.toUInt();
+            }
         }
     }
     

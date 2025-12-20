@@ -51,12 +51,20 @@ XMLElement* XmlEntitySerializer::serializeVariable(XMLDocument* doc, const XmlVa
     valElem->SetAttribute("Datatype", valueTypeToString(var.valueType).toStdString().c_str());
     valElem->SetAttribute("Valuetype", dataTypeToString(var.dataType).toStdString().c_str());
     
+    // Add Length attribute for Scalar BLOB if specified
+    if (var.valueType == XmlValueType::Scalar && var.dataType == XmlDataType::BLOB && var.scalarBlobLength >= 0) {
+        valElem->SetAttribute("Length", var.scalarBlobLength);
+    }
+    
     if (var.valueType == XmlValueType::Scalar) {
         QString strVal = var.value.toString();
         if (var.dataType == XmlDataType::BOOL) {
             strVal = var.value.toBool() ? "true" : "false";
         }
-        valElem->SetText(strVal.toStdString().c_str());
+        // Don't set text for empty scalar BLOBs (self-closing tag)
+        if (!(var.dataType == XmlDataType::BLOB && var.scalarBlobLength == 0)) {
+            valElem->SetText(strVal.toStdString().c_str());
+        }
     } else if (var.valueType == XmlValueType::SparseArray) {
         for (const auto& field : var.fields) {
             XMLElement* fieldElem = doc->NewElement("Field");
@@ -77,17 +85,23 @@ XMLElement* XmlEntitySerializer::serializeObject(XMLDocument* doc, const XmlObje
     if (obj.name == "Link") {
         XMLElement* linkElem = doc->NewElement("Link");
         
-        // Find AID
+        // Add AID first
         for(const auto& var : obj.variables) {
             if(var.name == "AID") {
                 XMLElement* aidElem = doc->NewElement("AID");
                 aidElem->SetText(var.value.toString().toStdString().c_str());
                 linkElem->InsertEndChild(aidElem);
+                break;
             }
+        }
+        
+        // Then add TargetRID
+        for(const auto& var : obj.variables) {
             if(var.name == "TargetRID") {
                 XMLElement* tridElem = doc->NewElement("TargetRID");
                 tridElem->SetText(var.value.toString().toStdString().c_str());
                 linkElem->InsertEndChild(tridElem);
+                break;
             }
         }
         return linkElem;
@@ -95,6 +109,13 @@ XMLElement* XmlEntitySerializer::serializeObject(XMLDocument* doc, const XmlObje
 
     XMLElement* elem = doc->NewElement("Object");
     elem->SetAttribute("Name", obj.name.toStdString().c_str());
+    
+    // GSDMLFile (optional, before ClassRID for devices)
+    if (!obj.gsdmlFile.isEmpty()) {
+        XMLElement* gsdmlElem = doc->NewElement("GSDMLFile");
+        gsdmlElem->SetText(obj.gsdmlFile.toStdString().c_str());
+        elem->InsertEndChild(gsdmlElem);
+    }
     
     // ClassRID
     XMLElement* classRidElem = doc->NewElement("ClassRID");

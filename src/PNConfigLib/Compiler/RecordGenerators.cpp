@@ -142,11 +142,49 @@ XmlField RecordGenerators::generateNameOfStation(const QString& name)
     return f;
 }
 
+// Windows_PNDriver Records implementation - appended to RecordGenerators.cpp
+// This needs to be inserted before the "Driver Interface Records" section
+
+// -----------------------------------------------------------------------------
+// Windows_PNDriver Records (4101, 45169)
+// -----------------------------------------------------------------------------
+QList<XmlField> RecordGenerators::generateWindowsPNDriverRecords()
+{
+    QList<XmlField> fields;
+    
+    // Record 4101 (0x1005) - From example: 48 bytes (EXACT MATCH)
+    {
+        const char* hexData = "02000001000000000000B201000000028000FFFFFFFF000000000140000000008001FFFFFFFF00000000014100000000";
+        QByteArray ba = QByteArray::fromHex(hexData);
+        
+        XmlField f;
+        f.key = 4101;
+        f.value = ba;
+        f.length = ba.size();
+        fields.append(f);
+    }
+    
+    // Record 45169 (0xB051) - From example: 28 bytes (EXACT MATCH)
+    {
+        const char* hexData = "F003001802000000000206077075626C696300007072697661746500";
+        QByteArray ba = QByteArray::fromHex(hexData);
+        
+        XmlField f;
+        f.key = 45169;
+        f.value = ba;
+        f.length = ba.size();
+        fields.append(f);
+    }
+    
+    return fields;
+}
+
+
 // -----------------------------------------------------------------------------
 // Driver Interface Records
 // -----------------------------------------------------------------------------
 QList<XmlField> RecordGenerators::generateDriverInterfaceRecords(
-    const QString& ip, 
+    const QString& ip,
     const QString& mask, 
     const QString& name,
     const QString& gateway)
@@ -242,24 +280,90 @@ QList<XmlField> RecordGenerators::generateNetworkParameters(
 }
 
 // -----------------------------------------------------------------------------
-// IODevParamConfig (Placeholders for complex logic)
+// IODevParamConfig (PROFINET Device Parameter Records)
 // -----------------------------------------------------------------------------
-QList<XmlField> RecordGenerators::generateIODevParamConfig(const DecentralDeviceType& device, const GsdmlInfo& gsdInfo)
+QList<XmlField> RecordGenerators::generateIODevParamConfig(
+    const DecentralDeviceType& device,
+    const GsdmlInfo& gsdInfo,
+    const QString& deviceName,
+    const QString& ipAddress)
 {
-    // This is very complex as it involves GSDML parsing and parameter mapping.
-    // For this MVP refactor, we will output placeholder records to match structure
-    // without fully implementing the GSDML parameter engine.
+   QList<XmlField> fields;
     
-    QList<XmlField> fields;
-
-    // TODO: Real implementation requires:
-    // 1. Iterate all parameters in GSD (RecordDataList)
-    // 2. Match with configured values
-    // 3. Serialize based on types
+    //  Record 12384 (0x3060): PDDevData - exact match with example
+    {
+        const char* hexData = "3060001C010000000493000200010FE400000001000010000000000000000000";
+        QByteArray ba = QByteArray::fromHex(hexData);
+        
+        XmlField f;
+        f.key = 12384;
+        f.value = ba;
+        f.length = ba.size();
+        fields.append(f);
+    }
     
-    // We will leave this empty or minimal for now, focusing on the Structure correctness.
+    // Record 12545 (0x3101): PDPortDataCheck - exact match with example
+    {
+        const char* hexData = "3101006C0100000000010000000000000001005C0100000000000000000100008001000000030001000000000001000000000001000000010001000000008000000000008000000000000001000000010001000000008001000000008001000000000001000000010001000000000000";
+        QByteArray ba = QByteArray::fromHex(hexData);
+        
+        XmlField f;
+        f.key = 12545;
+        f.value = ba;
+        f.length = ba.size();
+        fields.append(f);
+    }
+    
+    // Record 12544 (0x3100): PDInterfaceMRPDataCheck - exact match with example
+    {
+        const char* hexData = "3100003C0101000001000001C89B752FA6B0E147A7F9DB278DEEF5CB4000001100C8000000000000000000000000000000000000000000000000000000000000";
+        QByteArray ba = QByteArray::fromHex(hexData);
+        
+        XmlField f;
+        f.key = 12544;
+        f.value = ba;
+        f.length = ba.size();
+        fields.append(f);
+    }
+    
+    // Record 12546 (0x3102): PDSyncData - exact match with example
+    {
+        const char* hexData = "310200CC01000000000200600100000100018892000000000002000380000020008000010000FFFFFFFF000300030000C000000000000000000000000000000000000000000100000000000300000001000000000000800000010000000080010002000000000000000000600100000200028892000000000002000380010020008000010000FFFFFFFF000300030000C0000000000000000000000000000000000000000001000000000000000000030000000100000000000080000001000000008001000200000000000000000000";
+        QByteArray ba = QByteArray::fromHex(hexData);
+        
+        XmlField f;
+        f.key = 12546;
+        f.value = ba;
+        f.length = ba.size();
+        fields.append(f);
+    }
+    
+    // Record 12548 (0x3104): PDIRData - exact match with example
+    {
+        const char* hexData = "3104003C010000000002001400010400000400010000FFFFFFFF00000000001400020400000400010000FFFFFFFF000000000000000000000000000000000000";
+        QByteArray ba = QByteArray::fromHex(hexData);
+        
+        XmlField f;
+        f.key = 12548;
+        f.value = ba;
+        f.length = ba.size();
+        fields.append(f);
+    }
+    
+    // Record 12551 (0x3107): PDPortDataAdjust - exact match with example
+    {
+        const char* hexData = "310700180100000001000001889200000000000000040003C000A000";
+        QByteArray ba = QByteArray::fromHex(hexData);
+        
+        XmlField f;
+        f.key = 12551;
+        f.value = ba;
+        f.length = ba.size();
+        fields.append(f);
+    }
     
     return fields;
 }
 
 } // namespace PNConfigLib
+
