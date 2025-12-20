@@ -114,9 +114,8 @@ QString Compiler::generateOutputXml(
     driver.name = "Windows_PNDriver";
     driver.classRid = CompilerConstants::ClassRID_Windows_PNDriver;
     
-    // Driver DataRecordsConf (Records 4101, 45169 etc) - simplified for now
-    QList<XmlField> driverRecords;
-    // Add dummy or calculated records here if needed
+    // Driver DataRecordsConf (Records 4101, 45169 etc)
+    QList<XmlField> driverRecords = RecordGenerators::generateWindowsPNDriverRecords();
     driver.addBlobVariable("DataRecordsConf", CompilerConstants::AID_DataRecordsConf_Driver, driverRecords);
     
     // Driver Interface
