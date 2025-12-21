@@ -11,6 +11,9 @@
 #include "../PNConfigLib/Consistency/ConsistencyManager.h"
 #include <QStatusBar>
 #include <QFileDialog>
+#include <QMenuBar>
+#include <QMenu>
+#include <QAction>
 #include <QMessageBox>
 #include <QFileInfo>
 #include <QProcess>
@@ -21,8 +24,14 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , masterSimWidget(nullptr)
 {
     ui->setupUi(this);
+    
+    // 初始化主站模拟页面
+    masterSimWidget = new MasterSimulationWidget(this);
+    ui->simTabLayout->addWidget(masterSimWidget);
+    
     setupUi();
     setupConnections();
 }
@@ -35,8 +44,18 @@ MainWindow::~MainWindow()
 void MainWindow::setupUi()
 {
     setWindowTitle("PROFINET 配置生成工具");
-    resize(800, 500);
-    
+    resize(1200, 800);
+
+    // 创建菜单栏
+    QMenuBar *menubar = menuBar();
+    QMenu *operationMenu = menubar->addMenu("操作");
+    QAction *importAction = operationMenu->addAction(qApp->style()->standardIcon(QStyle::SP_FileIcon), "导入GSDML");
+    connect(importAction, &QAction::triggered, this, &MainWindow::onImportGsdmlGlobal);
+
+    menubar->addMenu("语言");
+    menubar->addMenu("帮助");
+    menubar->addMenu("关于");
+
     // 设置默认输出路径到项目根目录/results/时间戳
     QString appDir = QCoreApplication::applicationDirPath();
     QDir projectDir(appDir);
@@ -225,5 +244,15 @@ void MainWindow::onGenerateConfiguration()
     } catch (const std::exception& e) {
         QMessageBox::critical(this, "错误", QString("生成过程中出错:\n%1").arg(e.what()));
         statusBar()->showMessage("生成失败", 5000);
+    }
+}
+
+void MainWindow::onImportGsdmlGlobal()
+{
+    if (masterSimWidget) {
+        // Since we didn't make onImportGsdml public, let's just implement the logic or trigger refresh
+        // For simplicity in this step, let's assume we want to trigger the same logic.
+        // We can use QMetaObject::invokeMethod if we want to be safe with private slots.
+        QMetaObject::invokeMethod(masterSimWidget, "onImportGsdml");
     }
 }

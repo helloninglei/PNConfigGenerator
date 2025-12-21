@@ -19,6 +19,8 @@ set(SOURCES
     Widgets/DeviceConfigEditor.h
     Widgets/TopologyEditor.cpp
     Widgets/TopologyEditor.h
+    Widgets/MasterSimulationWidget.cpp
+    Widgets/MasterSimulationWidget.h
 )
 
 add_executable(PNConfigGenerator ${SOURCES})
@@ -29,6 +31,7 @@ target_link_libraries(PNConfigGenerator
         Qt6::Core
         Qt6::Widgets
         Qt6::Xml
+        Qt6::Network
 )
 
 target_include_directories(PNConfigGenerator

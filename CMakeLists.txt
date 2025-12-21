@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find Qt6 packages
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Xml)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Xml Network)
 
 # Enable automatic MOC, UIC, and RCC processing
 set(CMAKE_AUTOMOC ON)

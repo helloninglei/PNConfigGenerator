@@ -7,6 +7,8 @@ add_library(PNConfigLib STATIC
     DataModel/PCLObject.h
     DataModel/DeviceTypes.h
     DataModel/ModuleTypes.h
+    DataModel/DeviceCacheManager.h
+    DataModel/DeviceCacheManager.cpp
     
     # GSDML Parser
     GsdmlParser/GsdmlParser.h
