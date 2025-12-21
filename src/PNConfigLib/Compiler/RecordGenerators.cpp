@@ -203,7 +203,7 @@ QList<XmlField> RecordGenerators::generateDriverInterfaceRecords(
     // Key 4096 (IP Suite)
     {
         XmlField f; f.key = 4096;
-        f.value = QByteArray::fromHex("3000001001010000C0A80101FFFFFF00C0A80164");
+        f.value = QByteArray::fromHex("3000001001000000C0A80101FFFFFF00C0A80164");
         f.length = f.value.size(); fields.append(f);
     }
 
@@ -255,22 +255,28 @@ QList<XmlField> RecordGenerators::generateNetworkParameters(
 {
     QList<XmlField> fields;
     
-    // IP Suite
-    fields.append(generateIpSuite(ip, mask, ip));
+    // Hardcoded records for Network Parameters as per user requirement
     
-    // Name
-    fields.append(generateNameOfStation(name));
+    // Key 4099 (Name of Station Validation)
+    {
+        XmlField f; f.key = 4099;
+        f.value = QByteArray::fromHex("A20100180100000000100000706E6574786264657669636564646563");
+        f.length = f.value.size(); fields.append(f);
+    }
     
-    // Unknown 4103 (0x1007)
-    // Ref: 3011 0008 0101 0000 0000 0000
-    XmlField fAuth;
-    fAuth.key = CompilerConstants::Key_Unknown4103;
-    BlobBuilder b;
-    b.appendUint16(0x3011); b.appendUint16(0x0008); b.appendUint16(0x0101);
-    b.appendUint16(0x0000); b.appendUint32(0x00000000);
-    fAuth.value = b.toByteArray();
-    fAuth.length = fAuth.value.size();
-    fields.append(fAuth);
+    // Key 4096 (IP Suite)
+    {
+        XmlField f; f.key = 4096;
+        f.value = QByteArray::fromHex("3000001001000000C0A80102FFFFFF00C0A80164");
+        f.length = f.value.size(); fields.append(f);
+    }
+    
+    // Key 4103 (Authorization)
+    {
+        XmlField f; f.key = 4103;
+        f.value = QByteArray::fromHex("301100080101000000000000");
+        f.length = f.value.size(); fields.append(f);
+    }
     
     return fields;
 }

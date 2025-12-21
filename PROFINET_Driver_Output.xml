@@ -88,8 +88,8 @@
         <Variable Name="NetworkParamConfig">
           <AID>12</AID>
           <Value Datatype="SparseArray" Valuetype="BLOB">
-            <Field Key="4096" Length="20">3000001001000000C0A80002FFFFFF00C0A80002</Field>
-            <Field Key="4099" Length="22">A20100100100000000090000494F5F44657669636500</Field>
+            <Field Key="4099" Length="28">A20100180100000000100000706E6574786264657669636564646563</Field>
+            <Field Key="4096" Length="20">3000001001000000C0A80102FFFFFF00C0A80164</Field>
             <Field Key="4103" Length="12">301100080101000000000000</Field>
           </Value>
         </Variable>

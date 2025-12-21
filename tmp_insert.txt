@@ -1,0 +1,36 @@
+// Windows_PNDriver Records implementation - appended to RecordGenerators.cpp
+// This needs to be inserted before the "Driver Interface Records" section
+
+// -----------------------------------------------------------------------------
+// Windows_PNDriver Records (4101, 45169)
+// -----------------------------------------------------------------------------
+QList<XmlField> RecordGenerators::generateWindowsPNDriverRecords()
+{
+    QList<XmlField> fields;
+    
+    // Record 4101 (0x1005) - From example: 48 bytes
+    {
+        const char* hexData = "020000010000000000000000B201000000028000FFFFFFFF000000000140000000008001FFFFFFFF00000000014100000000";
+        QByteArray ba = QByteArray::fromHex(hexData);
+        
+        XmlField f;
+        f.key = 4101;
+        f.value = ba;
+        f.length = ba.size();
+        fields.append(f);
+    }
+    
+    // Record 45169 (0xB051) - From example: 28 bytes
+    {
+        const char* hexData = "F0030018020000000000206077075626C696300007072697661746500";
+        QByteArray ba = QByteArray::fromHex(hexData);
+        
+        XmlField f;
+        f.key = 45169;
+        f.value = ba;
+        f.length = ba.size();
+        fields.append(f);
+    }
+    
+    return fields;
+}
