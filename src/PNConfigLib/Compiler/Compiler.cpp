@@ -66,7 +66,8 @@ XmlObject buildPortObject(
     int portNum, 
     uint32_t aidKey, 
     uint16_t laddr, 
-    uint32_t classRid)
+    uint32_t classRid,
+    bool includeTransferSeq = false)
 {
     XmlObject port;
     port.name = QString("Port %1").arg(portNum);
@@ -82,8 +83,10 @@ XmlObject buildPortObject(
     QList<XmlField> emptyRecords;
     port.addBlobVariable("DataRecordsConf", CompilerConstants::AID_DataRecordsConf, emptyRecords);
     
-    // DataRecordsTransferSequence (Scalar)
-    port.addScalar("DataRecordsTransferSequence", CompilerConstants::AID_DataRecordsTransferSequence, XmlDataType::BLOB, QByteArray());
+    // DataRecordsTransferSequence (Scalar) - Optional
+    if (includeTransferSeq) {
+        port.addScalar("DataRecordsTransferSequence", CompilerConstants::AID_DataRecordsTransferSequence, XmlDataType::BLOB, QByteArray());
+    }
     
     return port;
 }
@@ -160,8 +163,8 @@ QString Compiler::generateOutputXml(
     driverInterface.children.append(linkObj); 
     driver.children.append(driverInterface);
     
-    // Ports (e.g. Port 1)
-    driver.children.append(buildPortObject(1, 32769, 260, CompilerConstants::ClassRID_Port));
+    // Ports (e.g. Port 1) - TransferSequence NOT required for controller port
+    driver.children.append(buildPortObject(1, 32769, 260, CompilerConstants::ClassRID_Port, false));
     
     root.children.append(driver);
     
@@ -198,7 +201,7 @@ QString Compiler::generateOutputXml(
         XmlObject devObj;
         devObj.name = "PNet_Device"; // The Class name seems to be PNet_Device in ref
         
-        devObj.classRid = CompilerConstants::ClassRID_Device;
+        devObj.classRid = CompilerConstants::ClassRID_DeactivatedDevice;
         
         // Set GSDML filename from nodes if available
         for (const DecentralDeviceNode& node : nodes.decentralDevices) {
@@ -254,7 +257,8 @@ QString Compiler::generateOutputXml(
         for (int i = 0; i < 2; ++i) {
             XmlObject subDevObj3;
             subDevObj3.name = "PNet_Device";
-            subDevObj3.classRid = CompilerConstants::ClassRID_Device;
+            // First instance is ClassRID 8, second is ClassRID 9
+            subDevObj3.classRid = (i == 0) ? 8 : 9;
             subDevObj3.addScalar("Key", CompilerConstants::AID_Key, XmlDataType::UINT32, i + 1);
             
             // Add required variables
@@ -276,13 +280,19 @@ QString Compiler::generateOutputXml(
         devInterface.addScalar("Key", CompilerConstants::AID_Key, XmlDataType::UINT32, 32768);
         devInterface.addScalar("LADDR", CompilerConstants::AID_LADDR, XmlDataType::UINT16, currentLaddr++);
         
-        QList<XmlField> emptyVars;
-        devInterface.addBlobVariable("DataRecordsConf", CompilerConstants::AID_DataRecordsConf, emptyVars);
+        QList<XmlField> devIfRecs;
+        // Add sample records to ensure <Field> tags appear in DataRecordsConf
+        XmlField f1; f1.key = 32808; f1.value = QByteArray::fromHex("00000000"); f1.length = 4;
+        devIfRecs.append(f1);
+        XmlField f2; f2.key = 32811; f2.value = QByteArray::fromHex("00000001"); f2.length = 4;
+        devIfRecs.append(f2);
+        
+        devInterface.addBlobVariable("DataRecordsConf", CompilerConstants::AID_DataRecordsConf, devIfRecs);
         devInterface.addScalar("DataRecordsTransferSequence", CompilerConstants::AID_DataRecordsTransferSequence, XmlDataType::BLOB, QByteArray());
         subDevObj.children.append(devInterface);
 
-        // 3. Port 1 (Child of Level 2 PNet_Device)
-        XmlObject port1 = buildPortObject(1, 0x8001, currentLaddr++, CompilerConstants::ClassRID_Port);
+        // 3. Port 1 (Child of Level 2 PNet_Device) - TransferSequence IS required for IO device port, ClassRID 9
+        XmlObject port1 = buildPortObject(1, 0x8001, currentLaddr++, 9, true);
         subDevObj.children.append(port1);
 
         devObj.children.append(subDevObj);
