@@ -259,7 +259,10 @@ QString Compiler::generateOutputXml(
             subDevObj3.name = "PNet_Device";
             // First instance is ClassRID 8, second is ClassRID 9
             subDevObj3.classRid = (i == 0) ? 8 : 9;
-            subDevObj3.addScalar("Key", CompilerConstants::AID_Key, XmlDataType::UINT32, i + 1);
+            
+            uint32_t keyAid = (i == 0) ? 1 : 2;
+            uint32_t keyVal = (i == 0) ? 0 : 1;
+            subDevObj3.addScalar("Key", keyAid, XmlDataType::UINT32, keyVal);
             
             // Add required variables
             subDevObj3.addScalar("LADDR", CompilerConstants::AID_LADDR, XmlDataType::UINT16, currentLaddr++);

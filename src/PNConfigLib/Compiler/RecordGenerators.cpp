@@ -191,62 +191,56 @@ QList<XmlField> RecordGenerators::generateDriverInterfaceRecords(
 {
     QList<XmlField> fields;
     
-    // 1. IP Suite
-    fields.append(generateIpSuite(ip, mask, gateway));
+    // Hardcoded records as per user requirement for PN_Driver_Windows_Interface
     
-    // 2. Name Of Station
-    fields.append(generateNameOfStation(name));
+    // Key 4097
+    {
+        XmlField f; f.key = 4097;
+        f.value = QByteArray::fromHex("300600080101000000000000");
+        f.length = f.value.size(); fields.append(f);
+    }
     
-    // 3. Unknown 4097 (0x1001) - Often "Multiple Interface"
-    // Ref: 3006 0008 0101 0000 0000 0000
-    XmlField f4097;
-    f4097.key = CompilerConstants::Key_Unknown4097;
-    BlobBuilder b1;
-    b1.appendUint16(0x3006); b1.appendUint16(0x0008); b1.appendUint16(0x0101);
-    b1.appendUint16(0x0000); b1.appendUint32(0x00000000);
-    f4097.value = b1.toByteArray();
-    f4097.length = f4097.value.size();
-    fields.append(f4097);
-    
-    // 4. Unknown 4100 (0x1004) - "Parameter Server"
-    // Ref: 3009 0008 0101 0000 0000 0000
-    XmlField f4100;
-    f4100.key = CompilerConstants::Key_Unknown4100;
-    BlobBuilder b2;
-    b2.appendUint16(0x3009); b2.appendUint16(0x0008); b2.appendUint16(0x0101);
-    b2.appendUint16(0x0000); b2.appendUint32(0x00000000);
-    f4100.value = b2.toByteArray();
-    f4100.length = f4100.value.size();
-    fields.append(f4100);
+    // Key 4096 (IP Suite)
+    {
+        XmlField f; f.key = 4096;
+        f.value = QByteArray::fromHex("3000001001010000C0A80101FFFFFF00C0A80164");
+        f.length = f.value.size(); fields.append(f);
+    }
 
-    // 5. SNMP Control (Key 32881 / 0x8071)
-    // Ref: 0250 0008 0100 0000 0000 0001
-    XmlField fSnmp;
-    fSnmp.key = CompilerConstants::Key_SnmpControl;
-    BlobBuilder b3;
-    b3.appendUint16(0x0250); b3.appendUint16(0x0008); b3.appendUint16(0x0100);
-    b3.appendUint16(0x0000); b3.appendUint32(0x00000001);
-    fSnmp.value = b3.toByteArray();
-    fSnmp.length = fSnmp.value.size();
-    fields.append(fSnmp);
+    // Key 4100
+    {
+        XmlField f; f.key = 4100;
+        f.value = QByteArray::fromHex("300900080101000000000000");
+        f.length = f.value.size(); fields.append(f);
+    }
 
-    // 6. Expected Config (Key 65536 / 0x10000)
-    // Ref: F000 0008 0100 0400 0003 0000
-    XmlField fExp;
-    fExp.key = CompilerConstants::Key_ExpectedConfig;
-    BlobBuilder b4;
-    b4.appendUint16(0xF000); b4.appendUint16(0x0008); b4.appendUint16(0x0100);
-    b4.appendUint16(0x0400); b4.appendUint16(0x0003); b4.appendUint16(0x0000);
-    fExp.value = b4.toByteArray();
-    fExp.length = fExp.value.size();
-    fields.append(fExp);
-    
-    // 7. Unknown 45169 (0xB071) - SNMP Communities or similar
-    XmlField f7;
-    f7.key = CompilerConstants::Key_Unknown45169;
-    f7.value = QByteArray::fromHex("F003001802000000000206077075626C696300007072697661746500");
-    f7.length = f7.value.size();
-    fields.append(f7);
+    // Key 4099 (Name of Station)
+    {
+        XmlField f; f.key = 4099;
+        f.value = QByteArray::fromHex("A2010020010000000015000077696E646F77737862706E64726976657264666162000000");
+        f.length = f.value.size(); fields.append(f);
+    }
+
+    // Key 65536
+    {
+        XmlField f; f.key = 65536;
+        f.value = QByteArray::fromHex("F00000080100040000030000");
+        f.length = f.value.size(); fields.append(f);
+    }
+
+    // Key 32881
+    {
+        XmlField f; f.key = 32881;
+        f.value = QByteArray::fromHex("025000080100000000000001");
+        f.length = f.value.size(); fields.append(f);
+    }
+
+    // Key 143616 (0x23100)
+    {
+        XmlField f; f.key = 143616;
+        f.value = QByteArray::fromHex("F001001001000000002A00080064000000000000");
+        f.length = f.value.size(); fields.append(f);
+    }
     
     return fields;
 }
