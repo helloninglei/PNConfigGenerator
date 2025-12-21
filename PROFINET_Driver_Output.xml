@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Object Name="HWConfiguration">
+  <ClassRID>1</ClassRID>
+  <Object Name="Windows_PNDriver">
+    <ClassRID>2</ClassRID>
+    <Variable Name="DataRecordsConf">
+      <AID>17</AID>
+      <Value Datatype="SparseArray" Valuetype="BLOB">
+        <Field Key="4101" Length="48">02000001000000000000B201000000028000FFFFFFFF000000000140000000008001FFFFFFFF00000000014100000000</Field>
+        <Field Key="45169" Length="28">F003001802000000000206077075626C696300007072697661746500</Field>
+      </Value>
+    </Variable>
+    <Object Name="PN_Driver_Windows_Interface">
+      <ClassRID>3</ClassRID>
+      <Key AID="2">32768</Key>
+      <Variable Name="LADDR">
+        <AID>10</AID>
+        <Value Datatype="Scalar" Valuetype="UINT16">259</Value>
+      </Variable>
+      <Variable Name="DataRecordsConf">
+        <AID>11</AID>
+        <Value Datatype="SparseArray" Valuetype="BLOB">
+          <Field Key="4097" Length="12">300600080101000000000000</Field>
+          <Field Key="4096" Length="20">3000001001000000C0A80101FFFFFF00C0A80164</Field>
+          <Field Key="4100" Length="12">300900080101000000000000</Field>
+          <Field Key="4099" Length="36">A2010020010000000015000077696E646F77737862706E64726976657264666162000000</Field>
+          <Field Key="65536" Length="12">F00000080100040000030000</Field>
+          <Field Key="32881" Length="12">025000080100000000000001</Field>
+          <Field Key="143616" Length="20">F001001001000000002A00080064000000000000</Field>
+        </Value>
+      </Variable>
+      <Link>
+        <AID>16</AID>
+        <TargetRID>2296447237</TargetRID>
+      </Link>
+    </Object>
+    <Object Name="Port 1">
+      <ClassRID>4</ClassRID>
+      <Key AID="2">32769</Key>
+      <Variable Name="LADDR">
+        <AID>10</AID>
+        <Value Datatype="Scalar" Valuetype="UINT16">260</Value>
+      </Variable>
+      <Variable Name="DataRecordsConf">
+        <AID>11</AID>
+        <Value Datatype="SparseArray" Valuetype="BLOB"/>
+      </Variable>
+    </Object>
+  </Object>
+  <Object Name="PROFINET IO-System">
+    <ClassRID>5</ClassRID>
+    <RID>2296447237</RID>
+    <Variable Name="LADDR">
+      <AID>10</AID>
+      <Value Datatype="Scalar" Valuetype="UINT16">261</Value>
+    </Variable>
+    <Variable Name="IOsysParamConfig">
+      <AID>15</AID>
+      <Value Datatype="SparseArray" Valuetype="BLOB">
+        <Field Key="12352" Length="20">3040001001010000002A000800640258012C0000</Field>
+      </Value>
+    </Variable>
+    <Object Name="PNet_Device">
+      <GSDMLFile>GSDML-V2.4-RT-Labs-P-Net-Sample-App-20220324.xml</GSDMLFile>
+      <ClassRID>6</ClassRID>
+      <Key AID="3">1</Key>
+      <Variable Name="DeactivatedConfig">
+        <AID>4</AID>
+        <Value Datatype="Scalar" Valuetype="BOOL">false</Value>
+      </Variable>
+      <Variable Name="LADDR">
+        <AID>10</AID>
+        <Value Datatype="Scalar" Valuetype="UINT16">264</Value>
+      </Variable>
+      <Variable Name="IODevParamConfig">
+        <AID>13</AID>
+        <Value Datatype="SparseArray" Valuetype="BLOB">
+          <Field Key="12384" Length="32">3060001C010000000493000200010FE400000001000010000000000000000000</Field>
+          <Field Key="12545" Length="112">3101006C0100000000010000000000000001005C0100000000000000000100008001000000030001000000000001000000000001000000010001000000008000000000008000000000000001000000010001000000008001000000008001000000000001000000010001000000000000</Field>
+          <Field Key="12544" Length="64">3100003C0101000001000001C89B752FA6B0E147A7F9DB278DEEF5CB4000001100C8000000000000000000000000000000000000000000000000000000000000</Field>
+          <Field Key="12546" Length="208">310200CC01000000000200600100000100018892000000000002000380000020008000010000FFFFFFFF000300030000C000000000000000000000000000000000000000000100000000000300000001000000000000800000010000000080010002000000000000000000600100000200028892000000000002000380010020008000010000FFFFFFFF000300030000C0000000000000000000000000000000000000000001000000000000000000030000000100000000000080000001000000008001000200000000000000000000</Field>
+          <Field Key="12548" Length="64">3104003C010000000002001400010400000400010000FFFFFFFF00000000001400020400000400010000FFFFFFFF000000000000000000000000000000000000</Field>
+          <Field Key="12551" Length="28">310700180100000001000001889200000000000000040003C000A000</Field>
+        </Value>
+      </Variable>
+      <Object Name="Network Parameters">
+        <ClassRID>11</ClassRID>
+        <Variable Name="NetworkParamConfig">
+          <AID>12</AID>
+          <Value Datatype="SparseArray" Valuetype="BLOB">
+            <Field Key="4096" Length="20">3000001001000000C0A80002FFFFFF00C0A80002</Field>
+            <Field Key="4099" Length="22">A20100100100000000090000494F5F44657669636500</Field>
+            <Field Key="4103" Length="12">301100080101000000000000</Field>
+          </Value>
+        </Variable>
+      </Object>
+      <Object Name="PNet_Device">
+        <ClassRID>7</ClassRID>
+        <Key AID="3">1</Key>
+        <Object Name="PNet_Device">
+          <ClassRID>8</ClassRID>
+          <Key AID="1">0</Key>
+          <Variable Name="LADDR">
+            <AID>10</AID>
+            <Value Datatype="Scalar" Valuetype="UINT16">265</Value>
+          </Variable>
+          <Variable Name="DataRecordsConf">
+            <AID>11</AID>
+            <Value Datatype="SparseArray" Valuetype="BLOB"/>
+          </Variable>
+          <Variable Name="DataRecordsTransferSequence">
+            <AID>14</AID>
+            <Value Datatype="Scalar" Valuetype="BLOB" Length="0"/>
+          </Variable>
+        </Object>
+        <Object Name="PNet_Device">
+          <ClassRID>9</ClassRID>
+          <Key AID="2">1</Key>
+          <Variable Name="LADDR">
+            <AID>10</AID>
+            <Value Datatype="Scalar" Valuetype="UINT16">266</Value>
+          </Variable>
+          <Variable Name="DataRecordsConf">
+            <AID>11</AID>
+            <Value Datatype="SparseArray" Valuetype="BLOB"/>
+          </Variable>
+          <Variable Name="DataRecordsTransferSequence">
+            <AID>14</AID>
+            <Value Datatype="Scalar" Valuetype="BLOB" Length="0"/>
+          </Variable>
+        </Object>
+        <Object Name="PNet_Device_Interface">
+          <ClassRID>9</ClassRID>
+          <Key AID="2">32768</Key>
+          <Variable Name="LADDR">
+            <AID>10</AID>
+            <Value Datatype="Scalar" Valuetype="UINT16">267</Value>
+          </Variable>
+          <Variable Name="DataRecordsConf">
+            <AID>11</AID>
+            <Value Datatype="SparseArray" Valuetype="BLOB">
+              <Field Key="32808" Length="4">00000000</Field>
+              <Field Key="32811" Length="4">00000001</Field>
+            </Value>
+          </Variable>
+          <Variable Name="DataRecordsTransferSequence">
+            <AID>14</AID>
+            <Value Datatype="Scalar" Valuetype="BLOB" Length="0"/>
+          </Variable>
+        </Object>
+        <Object Name="Port 1">
+          <ClassRID>9</ClassRID>
+          <Key AID="2">32769</Key>
+          <Variable Name="LADDR">
+            <AID>10</AID>
+            <Value Datatype="Scalar" Valuetype="UINT16">268</Value>
+          </Variable>
+          <Variable Name="DataRecordsConf">
+            <AID>11</AID>
+            <Value Datatype="SparseArray" Valuetype="BLOB"/>
+          </Variable>
+          <Variable Name="DataRecordsTransferSequence">
+            <AID>14</AID>
+            <Value Datatype="Scalar" Valuetype="BLOB" Length="0"/>
+          </Variable>
+        </Object>
+      </Object>
+    </Object>
+  </Object>
+</Object>
