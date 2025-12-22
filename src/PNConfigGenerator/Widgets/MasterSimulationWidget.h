@@ -29,6 +29,11 @@ private slots:
     void onConnectClicked();
     void onImportGsdml();
     void onCatalogSelectionChanged();
+    void onCatalogContextMenu(const QPoint &pos);
+    void onAddToConfiguration();
+    void onProjectTreeContextMenu(const QPoint &pos);
+    void onRemoveFromConfiguration();
+    void onProjectTreeDoubleClicked(QTreeWidgetItem *item, int column);
 
 private:
     void setupUi();
@@ -39,12 +44,14 @@ private:
     void addSlot(QVBoxLayout *layout, const QString &slotName, const QString &description, const QStringList &subslots = {});
     
     void updateDeviceDetail(const PNConfigLib::GsdmlInfo &info);
+    void displayDeviceSlots(const PNConfigLib::GsdmlInfo &info);
     QString formatIdent(uint32_t val);
 
     QToolBar *toolbar;
     QComboBox *nicComboBox;
     
     QTreeWidget *projectTree;
+    QTreeWidgetItem *stationsItem;
     QWidget *centerWidget;
     QVBoxLayout *slotLayout;
     

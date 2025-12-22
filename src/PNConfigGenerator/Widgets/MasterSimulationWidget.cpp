@@ -3,6 +3,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QStyle>
+#include <QMenu>
 #include <QToolBar>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -108,13 +109,18 @@ void MasterSimulationWidget::createLeftPanel(QSplitter *splitter)
     projectTree->setHeaderLabel("工程");
     
     QTreeWidgetItem *projectItem = new QTreeWidgetItem(projectTree, QStringList() << "Project");
-    QTreeWidgetItem *logicItem = new QTreeWidgetItem(projectItem, QStringList() << "Logic");
-    QTreeWidgetItem *stationsItem = new QTreeWidgetItem(projectItem, QStringList() << "从站列表");
+    new QTreeWidgetItem(projectItem, QStringList() << "Logic");
+    stationsItem = new QTreeWidgetItem(projectItem, QStringList() << "从站列表");
     
     QTreeWidgetItem *devItem = new QTreeWidgetItem(stationsItem, QStringList() << "rt-labs-dev [Discovery]");
     devItem->setSelected(true);
     
     projectTree->expandAll();
+    
+    projectTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(projectTree, &QTreeWidget::customContextMenuRequested, this, &MasterSimulationWidget::onProjectTreeContextMenu);
+    connect(projectTree, &QTreeWidget::itemDoubleClicked, this, &MasterSimulationWidget::onProjectTreeDoubleClicked);
+
     splitter->addWidget(projectTree);
 }
 
@@ -175,6 +181,9 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     splitter->addWidget(rightTabWidget);
 
     connect(catalogTree, &QTreeWidget::itemSelectionChanged, this, &MasterSimulationWidget::onCatalogSelectionChanged);
+    
+    catalogTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(catalogTree, &QTreeWidget::customContextMenuRequested, this, &MasterSimulationWidget::onCatalogContextMenu);
 }
 
 void MasterSimulationWidget::addSlot(QVBoxLayout *layout, const QString &slotName, const QString &description, const QStringList &subslots)
@@ -263,6 +272,130 @@ void MasterSimulationWidget::refreshCatalog()
     }
     
     catalogTree->expandAll();
+}
+
+void MasterSimulationWidget::onCatalogContextMenu(const QPoint &pos)
+{
+    QTreeWidgetItem *item = catalogTree->itemAt(pos);
+    if (!item || item->childCount() > 0) return; // Only for leaf nodes
+
+    QMenu menu(this);
+    QAction *addAction = menu.addAction("添加到配置");
+    connect(addAction, &QAction::triggered, this, &MasterSimulationWidget::onAddToConfiguration);
+    menu.exec(catalogTree->mapToGlobal(pos));
+}
+
+void MasterSimulationWidget::onProjectTreeContextMenu(const QPoint &pos)
+{
+    QTreeWidgetItem *item = projectTree->itemAt(pos);
+    if (!item || !stationsItem || item->parent() != stationsItem) return;
+
+    QMenu menu(this);
+    QAction *removeAction = menu.addAction("删除设备");
+    connect(removeAction, &QAction::triggered, this, &MasterSimulationWidget::onRemoveFromConfiguration);
+    menu.exec(projectTree->mapToGlobal(pos));
+}
+
+void MasterSimulationWidget::onRemoveFromConfiguration()
+{
+    QTreeWidgetItem *item = projectTree->currentItem();
+    if (!item || !stationsItem || item->parent() != stationsItem) return;
+
+    QString deviceName = item->text(0);
+    delete item;
+    
+    // Clear slot view if the device was viewing
+    // (In a more robust version, we'd check if center panel currently belongs to this device)
+    while (QLayoutItem* layoutItem = slotLayout->takeAt(0)) {
+        if (layoutItem->widget()) delete layoutItem->widget();
+        delete layoutItem;
+    }
+    
+    statusLabel->setText(QString(" 已删除设备: %1").arg(deviceName));
+}
+
+void MasterSimulationWidget::onProjectTreeDoubleClicked(QTreeWidgetItem *item, int column)
+{
+    Q_UNUSED(column);
+    if (!item || !stationsItem || item->parent() != stationsItem) return;
+
+    QVariant data = item->data(0, Qt::UserRole);
+    if (!data.isValid()) return;
+
+    int index = data.toInt();
+    if (index >= 0 && index < m_cachedDevices.size()) {
+        displayDeviceSlots(m_cachedDevices[index]);
+    } else {
+        // Mock slots for samples
+        PNConfigLib::GsdmlInfo mockInfo;
+        mockInfo.deviceName = "P-Net multi-module sample app";
+        
+        PNConfigLib::ModuleInfo m1;
+        m1.name = "DO 8xLogicLevel";
+        mockInfo.modules.append(m1);
+        
+        displayDeviceSlots(mockInfo);
+    }
+}
+
+void MasterSimulationWidget::displayDeviceSlots(const PNConfigLib::GsdmlInfo &info)
+{
+    // Clear current slots
+    while (QLayoutItem* layoutItem = slotLayout->takeAt(0)) {
+        if (layoutItem->widget()) delete layoutItem->widget();
+        delete layoutItem;
+    }
+
+    // Add DAP Slot (Slot 0)
+    QStringList dapSubslots = {"Subslot(0x0001) " + info.deviceName, "Subslot(0x8000) Interface", "Subslot(0x8001) Port - RJ 45"};
+    addSlot(slotLayout, "Slot(0x0000)", info.deviceName, dapSubslots);
+
+    // Add Modules (Starting from Slot 1)
+    for (int i = 0; i < info.modules.size(); ++i) {
+        const auto& mod = info.modules[i];
+        QString slotName = QString("Slot(0x%1)").arg(i + 1, 4, 16, QChar('0'));
+        QStringList subslots = { QString("Subslot(0x0001) ") + mod.name };
+        addSlot(slotLayout, slotName, mod.name, subslots);
+    }
+
+    // Fill some empty slots for visuals per design
+    for (int i = info.modules.size() + 1; i <= 8; ++i) {
+        QString slotName = QString("Slot(0x%1)").arg(i, 4, 16, QChar('0'));
+        addSlot(slotLayout, slotName, "Empty Slot");
+    }
+}
+
+void MasterSimulationWidget::onAddToConfiguration()
+{
+    QTreeWidgetItem *item = catalogTree->currentItem();
+    if (!item || !stationsItem) return;
+
+    QString deviceName = item->text(0);
+    
+    // Check for duplicates and append a suffix if needed
+    int count = 1;
+    QString finalName = deviceName;
+    bool exists = true;
+    while (exists) {
+        exists = false;
+        for (int i = 0; i < stationsItem->childCount(); ++i) {
+            if (stationsItem->child(i)->text(0) == finalName) {
+                exists = true;
+                finalName = QString("%1-%2").arg(deviceName).arg(count++);
+                break;
+            }
+        }
+    }
+
+    QTreeWidgetItem *newStation = new QTreeWidgetItem(stationsItem, QStringList() << finalName);
+    newStation->setIcon(0, qApp->style()->standardIcon(QStyle::SP_ComputerIcon));
+    
+    // Associate the info index from m_cachedDevices (if found) or use the data from the item itself
+    QVariant catalogData = item->data(0, Qt::UserRole);
+    newStation->setData(0, Qt::UserRole, catalogData);
+    
+    stationsItem->setExpanded(true);
+    statusLabel->setText(QString(" 已将设备 %1 添加到配置").arg(finalName));
 }
 
 void MasterSimulationWidget::onCatalogSelectionChanged()
