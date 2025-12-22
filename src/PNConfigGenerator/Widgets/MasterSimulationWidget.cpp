@@ -11,6 +11,7 @@ MasterSimulationWidget::MasterSimulationWidget(QWidget *parent)
     : QWidget(parent)
 {
     setupUi();
+    refreshCatalog();
 }
 
 void MasterSimulationWidget::setupUi()
@@ -141,17 +142,39 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
 {
     rightTabWidget = new QTabWidget(this);
     
-    QTreeWidget *catalogTree = new QTreeWidget(this);
-    catalogTree->setHeaderLabel("设备列表");
-    QTreeWidgetItem *ioItem = new QTreeWidgetItem(catalogTree, QStringList() << "I/O");
-    new QTreeWidgetItem(ioItem, QStringList() << "P-Net Samples");
-    catalogTree->expandAll();
+    // 1. Catalog Tab
+    QWidget *catalogTab = new QWidget(this);
+    QVBoxLayout *catalogTabLayout = new QVBoxLayout(catalogTab);
+    catalogTabLayout->setContentsMargins(0, 0, 0, 0);
     
-    rightTabWidget->addTab(catalogTree, "设备列表");
+    QSplitter *vSplitter = new QSplitter(Qt::Vertical, catalogTab);
+    
+    catalogTree = new QTreeWidget(this);
+    catalogTree->setHeaderLabel("设备列表");
+    vSplitter->addWidget(catalogTree);
+    
+    catalogDetailArea = new QScrollArea(this);
+    catalogDetailArea->setWidgetResizable(true);
+    catalogDetailArea->setFrameShape(QFrame::NoFrame);
+    catalogDetailArea->setStyleSheet("background-color: white;");
+    
+    catalogDetailContent = new QWidget();
+    catalogDetailLayout = new QVBoxLayout(catalogDetailContent);
+    catalogDetailLayout->setAlignment(Qt::AlignTop);
+    catalogDetailLayout->setContentsMargins(10, 10, 10, 10);
+    
+    catalogDetailArea->setWidget(catalogDetailContent);
+    vSplitter->addWidget(catalogDetailArea);
+    
+    catalogTabLayout->addWidget(vSplitter);
+    
+    rightTabWidget->addTab(catalogTab, "设备列表");
     rightTabWidget->addTab(new QWidget(), "子模块列表");
     rightTabWidget->addTab(new QWidget(), "在线");
     
     splitter->addWidget(rightTabWidget);
+
+    connect(catalogTree, &QTreeWidget::itemSelectionChanged, this, &MasterSimulationWidget::onCatalogSelectionChanged);
 }
 
 void MasterSimulationWidget::addSlot(QVBoxLayout *layout, const QString &slotName, const QString &description, const QStringList &subslots)
@@ -182,48 +205,179 @@ void MasterSimulationWidget::addSlot(QVBoxLayout *layout, const QString &slotNam
 
 void MasterSimulationWidget::refreshCatalog()
 {
-    // Find the Catalog Tree in the right tab widget
-    QTreeWidget *catalogTree = nullptr;
-    for (int i = 0; i < rightTabWidget->count(); ++i) {
-        if (rightTabWidget->tabText(i) == "设备列表") {
-            catalogTree = qobject_cast<QTreeWidget*>(rightTabWidget->widget(i));
-            break;
-        }
-    }
-
     if (!catalogTree) return;
 
     catalogTree->clear();
-    QTreeWidgetItem *ioItem = new QTreeWidgetItem(catalogTree, QStringList() << "I/O");
     
+    // Helper to find or create a child item with a specific name
+    auto findOrCreate = [](QTreeWidgetItem* parent, const QString& name) {
+        if (name.isEmpty()) return parent;
+        for (int i = 0; i < parent->childCount(); ++i) {
+            if (parent->child(i)->text(0) == name) {
+                return parent->child(i);
+            }
+        }
+        return new QTreeWidgetItem(parent, QStringList() << name);
+    };
+
     // Load from DeviceCacheManager
-    auto cachedDevices = PNConfigLib::DeviceCacheManager::instance().getCachedDevices();
-    for (const auto& device : cachedDevices) {
-        QString vendorName = device.deviceVendor;
-        QTreeWidgetItem *vendorItem = nullptr;
+    m_cachedDevices = PNConfigLib::DeviceCacheManager::instance().getCachedDevices();
+    
+    for (int i = 0; i < m_cachedDevices.size(); ++i) {
+        const auto& device = m_cachedDevices[i];
         
-        // Find existing vendor item
-        for (int i = 0; i < ioItem->childCount(); ++i) {
-            if (ioItem->child(i)->text(0) == vendorName) {
-                vendorItem = ioItem->child(i);
+        // 1. Vendor Name (Top Level)
+        QTreeWidgetItem* vendorItem = nullptr;
+        for (int j = 0; j < catalogTree->topLevelItemCount(); ++j) {
+            if (catalogTree->topLevelItem(j)->text(0) == device.deviceVendor) {
+                vendorItem = catalogTree->topLevelItem(j);
                 break;
             }
         }
-        
         if (!vendorItem) {
-            vendorItem = new QTreeWidgetItem(ioItem, QStringList() << vendorName);
+            vendorItem = new QTreeWidgetItem(catalogTree, QStringList() << device.deviceVendor);
         }
-        
-        new QTreeWidgetItem(vendorItem, QStringList() << device.deviceName);
+
+        // 2. Main Family
+        QString mainFam = device.mainFamily.isEmpty() ? "I/O" : device.mainFamily;
+        QTreeWidgetItem* mainFamilyItem = findOrCreate(vendorItem, mainFam);
+
+        // 3. Product Family
+        QString prodFam = device.productFamily.isEmpty() ? "P-Net Samples" : device.productFamily;
+        QTreeWidgetItem* productFamilyItem = findOrCreate(mainFamilyItem, prodFam);
+
+        // 4. Device Name (Leaf)
+        QTreeWidgetItem *deviceItem = new QTreeWidgetItem(productFamilyItem, QStringList() << device.deviceName);
+        deviceItem->setData(0, Qt::UserRole, i);
+        deviceItem->setIcon(0, qApp->style()->standardIcon(QStyle::SP_DriveHDIcon));
     }
     
     // Add default mock items if empty or as extra
-    if (cachedDevices.isEmpty()) {
-        QTreeWidgetItem *mockVendor = new QTreeWidgetItem(ioItem, QStringList() << "P-Net Samples");
-        new QTreeWidgetItem(mockVendor, QStringList() << "P-Net multi-module sample app");
+    if (m_cachedDevices.isEmpty()) {
+        QTreeWidgetItem* rtLabs = new QTreeWidgetItem(catalogTree, QStringList() << "RT-Labs");
+        QTreeWidgetItem* io = new QTreeWidgetItem(rtLabs, QStringList() << "I/O");
+        QTreeWidgetItem* samples = new QTreeWidgetItem(io, QStringList() << "P-Net Samples");
+        QTreeWidgetItem *mockItem = new QTreeWidgetItem(samples, QStringList() << "P-Net multi-module sample app");
+        mockItem->setData(0, Qt::UserRole, -1);
+        mockItem->setIcon(0, qApp->style()->standardIcon(QStyle::SP_DriveHDIcon));
     }
     
     catalogTree->expandAll();
+}
+
+void MasterSimulationWidget::onCatalogSelectionChanged()
+{
+    QTreeWidgetItem *item = catalogTree->currentItem();
+    if (!item || item->childCount() > 0) return; // Vendor or I/O node
+
+    QVariant data = item->data(0, Qt::UserRole);
+    if (!data.isValid()) return;
+
+    int index = data.toInt();
+    if (index >= 0 && index < m_cachedDevices.size()) {
+        updateDeviceDetail(m_cachedDevices[index]);
+    } else {
+        // Mock detail for samples
+        PNConfigLib::GsdmlInfo mockInfo;
+        mockInfo.deviceName = "P-Net multi-module sample app";
+        mockInfo.deviceVendor = "RT-Labs";
+        mockInfo.vendorId = 0x0493;
+        mockInfo.deviceId = 0x0002;
+        mockInfo.deviceID = "2";
+        mockInfo.filePath = "GSDML\\GSDML-V2.4-RT-Labs-P-Net-Sample-App-20220324.xml";
+        
+        PNConfigLib::ModuleInfo m1;
+        m1.name = "P-Net multi-module sample app";
+        m1.id = "16#00000001";
+        mockInfo.modules.append(m1);
+        mockInfo.modules.append(m1); // Duplicate for design
+        
+        PNConfigLib::ModuleInfo m2;
+        m2.name = "X1";
+        m2.id = "16#00008000";
+        mockInfo.modules.append(m2);
+
+        updateDeviceDetail(mockInfo);
+    }
+}
+
+QString MasterSimulationWidget::formatIdent(uint32_t val)
+{
+    return QString::number(val);
+}
+
+void MasterSimulationWidget::updateDeviceDetail(const PNConfigLib::GsdmlInfo &info)
+{
+    // Clear layout
+    QLayoutItem *child;
+    while ((child = catalogDetailLayout->takeAt(0)) != nullptr) {
+        if (child->widget()) {
+            child->widget()->deleteLater();
+        }
+        delete child;
+    }
+
+    auto addProp = [&](const QString &label, const QString &value) {
+        QHBoxLayout *row = new QHBoxLayout();
+        QLabel *lbl = new QLabel(label, this);
+        lbl->setFixedWidth(100);
+        lbl->setStyleSheet("color: #666;");
+        QLabel *val = new QLabel(value, this);
+        val->setStyleSheet("color: #0000cc;");
+        row->addWidget(lbl);
+        row->addWidget(val);
+        row->addStretch();
+        catalogDetailLayout->addLayout(row);
+    };
+
+    QLabel *nameTitle = new QLabel(info.deviceName, this);
+    QFont titleFont = nameTitle->font();
+    titleFont.setPointSize(16);
+    nameTitle->setFont(titleFont);
+    catalogDetailLayout->addWidget(nameTitle);
+    catalogDetailLayout->addSpacing(10);
+
+    addProp("厂商ID", QString::number(info.vendorId));
+    addProp("设备ID", QString::number(info.deviceId));
+    addProp("厂商名称", info.deviceVendor);
+    addProp("软件发布", "V0.1.0"); // Hardcoded for now
+    addProp("主系列", "I/O");
+    addProp("产品系列", "P-Net Samples");
+    addProp("文件", info.filePath);
+    catalogDetailLayout->addSpacing(10);
+    addProp("产品符号", "");
+
+    catalogDetailLayout->addSpacing(20);
+    
+    QLabel *moduleTitle = new QLabel("▼ 模块列表", this);
+    moduleTitle->setStyleSheet("font-weight: bold; padding: 5px; background: #eee;");
+    catalogDetailLayout->addWidget(moduleTitle);
+
+    for (const auto& module : info.modules) {
+        QWidget *modWidget = new QWidget(this);
+        QHBoxLayout *modLayout = new QHBoxLayout(modWidget);
+        modLayout->setContentsMargins(5, 5, 5, 5);
+        
+        QLabel *idLbl = new QLabel(module.id.isEmpty() ? "16#00000000" : module.id, this);
+        idLbl->setFixedWidth(100);
+        
+        QVBoxLayout *descLayout = new QVBoxLayout();
+        QLabel *nameLbl = new QLabel(module.name, this);
+        nameLbl->setStyleSheet("font-weight: bold;");
+        QLabel *descLbl = new QLabel("Profinet device sample app", this);
+        descLbl->setStyleSheet("color: #666; font-size: 10px;");
+        descLayout->addWidget(nameLbl);
+        descLayout->addWidget(descLbl);
+        
+        modLayout->addWidget(idLbl);
+        modLayout->addLayout(descLayout);
+        modLayout->addStretch();
+        
+        modWidget->setStyleSheet("border-bottom: 1px solid #eee;");
+        catalogDetailLayout->addWidget(modWidget);
+    }
+    
+    catalogDetailLayout->addStretch();
 }
 
 void MasterSimulationWidget::onImportGsdml()

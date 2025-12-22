@@ -102,8 +102,34 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
 
     XMLElement* profileBody = root->FirstChildElement("ProfileBody");
     if (!profileBody) return fallbackParseGSDML(gsdmlPath);
-    
-    // Extract Device Identity (directly under ProfileBody, NOT ApplicationProcess!)
+
+    // 1. Parse ExternalTextList/PrimaryLanguage for TextId resolution
+    QHash<QString, QString> textMap;
+    XMLElement* appProcess = profileBody->FirstChildElement("ApplicationProcess");
+    if (appProcess) {
+        XMLElement* extTextList = appProcess->FirstChildElement("ExternalTextList");
+        if (extTextList) {
+            XMLElement* primLang = extTextList->FirstChildElement("PrimaryLanguage");
+            if (primLang) {
+                XMLElement* textItem = primLang->FirstChildElement("Text");
+                while (textItem) {
+                    QString id = getAttribute(textItem, "TextId");
+                    QString val = getAttribute(textItem, "Value");
+                    if (!id.isEmpty()) {
+                        textMap[id] = val;
+                    }
+                    textItem = textItem->NextSiblingElement("Text");
+                }
+            }
+        }
+    }
+
+    auto resolve = [&](const QString& textId) -> QString {
+        if (textId.isEmpty()) return textId;
+        return textMap.value(textId, textId); // Return original if not found
+    };
+
+    // 2. Extract Device Identity
     XMLElement* deviceIdent = profileBody->FirstChildElement("DeviceIdentity");
     if (deviceIdent) {
         // Extract VendorID and DeviceID hex values
@@ -122,11 +148,20 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
         // Extract vendor name
         XMLElement* vendorName = deviceIdent->FirstChildElement("VendorName");
         if (vendorName) {
-            info.deviceVendor = getAttribute(vendorName, "Value");
+            info.deviceVendor = resolve(getAttribute(vendorName, "Value"));
+        }
+    }
+
+    // Extract Device Function (MainFamily and ProductFamily)
+    XMLElement* deviceFunction = profileBody->FirstChildElement("DeviceFunction");
+    if (deviceFunction) {
+        XMLElement* family = deviceFunction->FirstChildElement("Family");
+        if (family) {
+            info.mainFamily = resolve(getAttribute(family, "MainFamily", "I/O"));
+            info.productFamily = resolve(getAttribute(family, "ProductFamily", "P-Net Samples"));
         }
     }
     
-    XMLElement* appProcess = profileBody->FirstChildElement("ApplicationProcess");
     if (!appProcess) return fallbackParseGSDML(gsdmlPath);
     
     // Extract device access point
@@ -136,6 +171,15 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
         if (dapItem) {
             info.deviceAccessPointId = getAttribute(dapItem, "ID");
             
+            // Extract Device Name from ModuleInfo
+            XMLElement* modInfo = dapItem->FirstChildElement("ModuleInfo");
+            if (modInfo) {
+                info.deviceName = resolve(getAttribute(modInfo, "Name"));
+            }
+            if (info.deviceName.isEmpty()) {
+                info.deviceName = info.deviceAccessPointId;
+            }
+
             // Extract DAP ModuleIdentNumber
             QString dapModuleIdStr = getAttribute(dapItem, "ModuleIdentNumber");
             if (!dapModuleIdStr.isEmpty()) {
@@ -162,7 +206,7 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
             // Module Info
             XMLElement* modInfo = moduleItem->FirstChildElement("ModuleInfo");
             if (modInfo) {
-                module.name = getAttribute(modInfo, "Name");
+                module.name = resolve(getAttribute(modInfo, "Name"));
             }
             
             // Virtual Submodules
@@ -181,7 +225,7 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
                     
                     XMLElement* smInfo = subItem->FirstChildElement("ModuleInfo");
                     if (smInfo) {
-                        submodule.name = getAttribute(smInfo, "Name");
+                        submodule.name = resolve(getAttribute(smInfo, "Name"));
                     }
                     
                     // Parse IOData

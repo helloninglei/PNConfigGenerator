@@ -2,6 +2,7 @@
 #define MASTERSIMULATIONWIDGET_H
 
 #include <QWidget>
+#include <cstdint>
 #include <QComboBox>
 #include <QPushButton>
 #include <QTableWidget>
@@ -14,6 +15,7 @@
 #include <QTabWidget>
 #include <QToolBar>
 #include <QScrollArea>
+#include "../PNConfigLib/GsdmlParser/GsdmlParser.h"
 
 class MasterSimulationWidget : public QWidget
 {
@@ -26,6 +28,7 @@ private slots:
     void onScanClicked();
     void onConnectClicked();
     void onImportGsdml();
+    void onCatalogSelectionChanged();
 
 private:
     void setupUi();
@@ -33,8 +36,10 @@ private:
     void createLeftPanel(QSplitter *splitter);
     void createCenterPanel(QSplitter *splitter);
     void createRightPanel(QSplitter *splitter);
-    
     void addSlot(QVBoxLayout *layout, const QString &slotName, const QString &description, const QStringList &subslots = {});
+    
+    void updateDeviceDetail(const PNConfigLib::GsdmlInfo &info);
+    QString formatIdent(uint32_t val);
 
     QToolBar *toolbar;
     QComboBox *nicComboBox;
@@ -42,8 +47,15 @@ private:
     QTreeWidget *projectTree;
     QWidget *centerWidget;
     QVBoxLayout *slotLayout;
-    QTabWidget *rightTabWidget;
     
+    // Right panel
+    QTabWidget *rightTabWidget;
+    QTreeWidget *catalogTree;
+    QScrollArea *catalogDetailArea;
+    QWidget *catalogDetailContent;
+    QVBoxLayout *catalogDetailLayout;
+    
+    QList<PNConfigLib::GsdmlInfo> m_cachedDevices;
     QLabel *statusLabel;
 };
 
