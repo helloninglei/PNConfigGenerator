@@ -34,6 +34,7 @@ private slots:
     void onProjectTreeContextMenu(const QPoint &pos);
     void onRemoveFromConfiguration();
     void onProjectTreeDoubleClicked(QTreeWidgetItem *item, int column);
+    void onSlotClicked(int slotIndex);
 
 private:
     void setupUi();
@@ -41,10 +42,11 @@ private:
     void createLeftPanel(QSplitter *splitter);
     void createCenterPanel(QSplitter *splitter);
     void createRightPanel(QSplitter *splitter);
-    void addSlot(QVBoxLayout *layout, const QString &slotName, const QString &description, const QStringList &subslots = {});
+    void addSlot(QVBoxLayout *layout, int slotIndex, const QString &slotName, const QString &description, const QStringList &subslots = {});
     
     void updateDeviceDetail(const PNConfigLib::GsdmlInfo &info);
     void displayDeviceSlots(const PNConfigLib::GsdmlInfo &info);
+    void showBasicConfig(const PNConfigLib::GsdmlInfo &info);
     QString formatIdent(uint32_t val);
 
     QToolBar *toolbar;
@@ -52,8 +54,18 @@ private:
     
     QTreeWidget *projectTree;
     QTreeWidgetItem *stationsItem;
-    QWidget *centerWidget;
+    
+    // Center panel
+    QSplitter *centerSplitter;
+    QScrollArea *slotScrollArea;
+    QWidget *slotContainer;
     QVBoxLayout *slotLayout;
+    QScrollArea *configArea;
+    QWidget *configWidget;
+    QVBoxLayout *configLayout;
+    
+    PNConfigLib::GsdmlInfo m_currentStationInfo;
+    int m_selectedSlotIndex = -1;
     
     // Right panel
     QTabWidget *rightTabWidget;

@@ -7,6 +7,13 @@
 #include <QToolBar>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QLineEdit>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QGroupBox>
+#include <QPushButton>
+#include <QFormLayout>
+#include <QListWidget>
 
 MasterSimulationWidget::MasterSimulationWidget(QWidget *parent)
     : QWidget(parent)
@@ -126,22 +133,44 @@ void MasterSimulationWidget::createLeftPanel(QSplitter *splitter)
 
 void MasterSimulationWidget::createCenterPanel(QSplitter *splitter)
 {
-    QScrollArea *scrollArea = new QScrollArea(this);
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setFrameShape(QFrame::NoFrame);
+    centerSplitter = new QSplitter(Qt::Horizontal, this);
     
-    centerWidget = new QWidget();
-    slotLayout = new QVBoxLayout(centerWidget);
+    // Left side: Slot List
+    slotScrollArea = new QScrollArea(this);
+    slotScrollArea->setWidgetResizable(true);
+    slotScrollArea->setFrameShape(QFrame::NoFrame);
+    
+    slotContainer = new QWidget();
+    slotLayout = new QVBoxLayout(slotContainer);
     slotLayout->setAlignment(Qt::AlignTop);
     
-    addSlot(slotLayout, "Slot(0x0000)", "P-Net multi-module sample app", {"Subslot(0x0001) P-Net multi-module sample app", "Subslot(0x8000) X1", "Subslot(0x8001) X1 P1"});
-    addSlot(slotLayout, "Slot(0x0001)", "DO 8xLogicLevel", {"Subslot(0x0001) DO 8xLogicLevel"});
-    addSlot(slotLayout, "Slot(0x0002)", "Empty Slot");
-    addSlot(slotLayout, "Slot(0x0003)", "Empty Slot");
-    addSlot(slotLayout, "Slot(0x0004)", "Empty Slot");
+    // Add some initial empty slots
+    for (int i = 0; i <= 8; ++i) {
+        QString slotName = QString("Slot(0x%1)").arg(i, 4, 16, QChar('0'));
+        addSlot(slotLayout, i, slotName, "Empty Slot");
+    }
     
-    scrollArea->setWidget(centerWidget);
-    splitter->addWidget(scrollArea);
+    slotScrollArea->setWidget(slotContainer);
+    centerSplitter->addWidget(slotScrollArea);
+    
+    // Right side: Basic Config Panel
+    configArea = new QScrollArea(this);
+    configArea->setWidgetResizable(true);
+    configArea->setFrameShape(QFrame::NoFrame);
+    configArea->setStyleSheet("background-color: white; border-left: 1px solid #ccc;");
+    
+    configWidget = new QWidget();
+    configLayout = new QVBoxLayout(configWidget);
+    configLayout->setAlignment(Qt::AlignTop);
+    
+    configArea->setWidget(configWidget);
+    centerSplitter->addWidget(configArea);
+    
+    // Set initial splitter sizes
+    centerSplitter->setStretchFactor(0, 1);
+    centerSplitter->setStretchFactor(1, 1);
+    
+    splitter->addWidget(centerSplitter);
 }
 
 void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
@@ -186,23 +215,42 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     connect(catalogTree, &QTreeWidget::customContextMenuRequested, this, &MasterSimulationWidget::onCatalogContextMenu);
 }
 
-void MasterSimulationWidget::addSlot(QVBoxLayout *layout, const QString &slotName, const QString &description, const QStringList &subslots)
+void MasterSimulationWidget::addSlot(QVBoxLayout *layout, int slotIndex, const QString &slotName, const QString &description, const QStringList &subslots)
 {
     QFrame *slotFrame = new QFrame(this);
     slotFrame->setFrameShape(QFrame::StyledPanel);
-    slotFrame->setStyleSheet("background-color: #f7f7f7; margin-bottom: 5px;");
+    slotFrame->setProperty("slotIndex", slotIndex);
+    
+    // Selection styling (rough draft)
+    if (m_selectedSlotIndex == slotIndex) {
+        slotFrame->setStyleSheet("background-color: #f0f7ff; border: 2px solid #0078d7; margin-bottom: 5px;");
+    } else {
+        slotFrame->setStyleSheet("background-color: #f7f7f7; border: 1px solid #ccc; margin-bottom: 5px;");
+    }
     
     QVBoxLayout *vbox = new QVBoxLayout(slotFrame);
-    vbox->setContentsMargins(5, 5, 5, 5);
+    vbox->setContentsMargins(0, 0, 0, 0);
+    vbox->setSpacing(0);
     
-    QLabel *header = new QLabel(QString("<b>%1</b> - %2").arg(slotName, description), this);
-    header->setStyleSheet("background-color: #e0e0e0; padding: 3px;");
-    vbox->addWidget(header);
+    QPushButton *headerBtn = new QPushButton(QString(" %1 - %2").arg(slotName, description), this);
+    headerBtn->setStyleSheet("text-align: left; background-color: #e0e0e0; padding: 5px; border: none; font-weight: bold;");
+    headerBtn->setCursor(Qt::PointingHandCursor);
+    vbox->addWidget(headerBtn);
     
-    for (const QString &subslot : subslots) {
-        QLabel *subLabel = new QLabel(subslot, this);
-        subLabel->setStyleSheet("padding-left: 15px; background-color: white; border: 1px solid #eee;");
-        vbox->addWidget(subLabel);
+    connect(headerBtn, &QPushButton::clicked, [this, slotIndex]() {
+        onSlotClicked(slotIndex);
+    });
+    
+    if (!subslots.isEmpty()) {
+        QWidget *subContainer = new QWidget();
+        QVBoxLayout *subVbox = new QVBoxLayout(subContainer);
+        subVbox->setContentsMargins(5, 5, 5, 5);
+        for (const QString &subslot : subslots) {
+            QLabel *subLabel = new QLabel(subslot, this);
+            subLabel->setStyleSheet("padding: 3px; padding-left: 15px; background-color: white; border: 1px solid #eee; margin-top: 2px;");
+            subVbox->addWidget(subLabel);
+        }
+        vbox->addWidget(subContainer);
     }
     
     layout->addWidget(slotFrame);
@@ -324,17 +372,39 @@ void MasterSimulationWidget::onProjectTreeDoubleClicked(QTreeWidgetItem *item, i
 
     int index = data.toInt();
     if (index >= 0 && index < m_cachedDevices.size()) {
-        displayDeviceSlots(m_cachedDevices[index]);
+        m_currentStationInfo = m_cachedDevices[index];
     } else {
         // Mock slots for samples
-        PNConfigLib::GsdmlInfo mockInfo;
-        mockInfo.deviceName = "P-Net multi-module sample app";
+        m_currentStationInfo = PNConfigLib::GsdmlInfo();
+        m_currentStationInfo.deviceName = "P-Net multi-module sample app";
         
         PNConfigLib::ModuleInfo m1;
         m1.name = "DO 8xLogicLevel";
-        mockInfo.modules.append(m1);
-        
-        displayDeviceSlots(mockInfo);
+        m_currentStationInfo.modules.append(m1);
+    }
+    
+    // Reset selection and display
+    m_selectedSlotIndex = 0; // Default Select Slot 0
+    displayDeviceSlots(m_currentStationInfo);
+    showBasicConfig(m_currentStationInfo);
+}
+
+void MasterSimulationWidget::onSlotClicked(int slotIndex)
+{
+    m_selectedSlotIndex = slotIndex;
+    
+    // Refresh slot list to update selection styling
+    displayDeviceSlots(m_currentStationInfo);
+    
+    if (slotIndex == 0) {
+        showBasicConfig(m_currentStationInfo);
+    } else {
+        // Clear config area or show module config
+        while (QLayoutItem* item = configLayout->takeAt(0)) {
+            if (item->widget()) delete item->widget();
+            delete item;
+        }
+        configLayout->addWidget(new QLabel("模块配置 (Slot " + QString::number(slotIndex) + ")"));
     }
 }
 
@@ -347,22 +417,71 @@ void MasterSimulationWidget::displayDeviceSlots(const PNConfigLib::GsdmlInfo &in
     }
 
     // Add DAP Slot (Slot 0)
-    QStringList dapSubslots = {"Subslot(0x0001) " + info.deviceName, "Subslot(0x8000) Interface", "Subslot(0x8001) Port - RJ 45"};
-    addSlot(slotLayout, "Slot(0x0000)", info.deviceName, dapSubslots);
+    QStringList dapSubslots = {"Subslot(0x0001) " + info.deviceName, "Subslot(0x8000) X1", "Subslot(0x8001) X1 P1"};
+    addSlot(slotLayout, 0, "Slot(0x0000)", info.deviceName, dapSubslots);
 
-    // Add Modules (Starting from Slot 1)
-    for (int i = 0; i < info.modules.size(); ++i) {
-        const auto& mod = info.modules[i];
-        QString slotName = QString("Slot(0x%1)").arg(i + 1, 4, 16, QChar('0'));
-        QStringList subslots = { QString("Subslot(0x0001) ") + mod.name };
-        addSlot(slotLayout, slotName, mod.name, subslots);
-    }
-
-    // Fill some empty slots for visuals per design
-    for (int i = info.modules.size() + 1; i <= 8; ++i) {
+    // Other slots are empty in initial state as requested
+    for (int i = 1; i <= 8; ++i) {
         QString slotName = QString("Slot(0x%1)").arg(i, 4, 16, QChar('0'));
-        addSlot(slotLayout, slotName, "Empty Slot");
+        addSlot(slotLayout, i, slotName, "");
     }
+    
+    slotLayout->addStretch();
+}
+
+void MasterSimulationWidget::showBasicConfig(const PNConfigLib::GsdmlInfo &info)
+{
+    // Clear config layout
+    while (QLayoutItem* item = configLayout->takeAt(0)) {
+        if (item->widget()) delete item->widget();
+        delete item;
+    }
+
+    // 1. Station Name Group
+    QGroupBox *nameGroup = new QGroupBox("站名称", this);
+    QFormLayout *nameForm = new QFormLayout(nameGroup);
+    QLineEdit *nameEdit = new QLineEdit(statusLabel->text().trimmed().split(" ").last(), this); // Use a name from status if possible
+    if (nameEdit->text().isEmpty()) nameEdit->setText("rt-labs-dev");
+    nameForm->addRow("名称", nameEdit);
+    configLayout->addWidget(nameGroup);
+
+    // 2. IP Config Group
+    QGroupBox *ipGroup = new QGroupBox("IP配置", this);
+    QVBoxLayout *ipVbox = new QVBoxLayout(ipGroup);
+    QCheckBox *startupCheck = new QCheckBox("启动期间配置设备", this);
+    startupCheck->setChecked(true);
+    ipVbox->addWidget(startupCheck);
+    
+    QFormLayout *ipForm = new QFormLayout();
+    ipForm->addRow("IP", new QLineEdit("192.168.0.253", this));
+    ipForm->addRow("子网掩码", new QLineEdit("255.255.255.0", this));
+    ipForm->addRow("网关", new QLineEdit("192.168.0.1", this));
+    ipVbox->addLayout(ipForm);
+    configLayout->addWidget(ipGroup);
+
+    // 3. IO Cycle Time
+    QGroupBox *ioGroup = new QGroupBox("IO周期时间(ms)", this);
+    QVBoxLayout *ioVbox = new QVBoxLayout(ioGroup);
+    QComboBox *ioCombo = new QComboBox(this);
+    ioCombo->addItem("256");
+    ioVbox->addWidget(ioCombo);
+    configLayout->addWidget(ioGroup);
+
+    // 4. Watchdog
+    QGroupBox *wdGroup = new QGroupBox("看门狗因子", this);
+    QHBoxLayout *wdHbox = new QHBoxLayout(wdGroup);
+    wdHbox->addWidget(new QLineEdit("7", this));
+    wdHbox->addWidget(new QLabel("允许值: [3..7]", this));
+    configLayout->addWidget(wdGroup);
+    
+    // 5. Subslot List (as seen in image)
+    QStringList subSlots = {"(0x0001) - " + info.deviceName, "(0x8000) - X1", "(0x8001) - X1 P1"};
+    QListWidget *subList = new QListWidget(this);
+    subList->addItems(subSlots);
+    subList->setStyleSheet("background-color: #87CEEB; border: none; font-weight: bold;"); // SkyBlue background
+    configLayout->addWidget(subList);
+
+    configLayout->addStretch();
 }
 
 void MasterSimulationWidget::onAddToConfiguration()
