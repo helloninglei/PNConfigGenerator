@@ -203,8 +203,20 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     
     catalogTabLayout->addWidget(vSplitter);
     
+    // 2. Module Tab
+    QWidget *moduleTab = new QWidget(this);
+    QVBoxLayout *moduleTabLayout = new QVBoxLayout(moduleTab);
+    moduleTabLayout->setContentsMargins(0, 0, 0, 0);
+    
+    moduleTree = new QTreeWidget(this);
+    moduleTree->setHeaderLabel("子模块列表");
+    moduleTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(moduleTree, &QTreeWidget::customContextMenuRequested, this, &MasterSimulationWidget::onModuleContextMenu);
+    
+    moduleTabLayout->addWidget(moduleTree);
+    
     rightTabWidget->addTab(catalogTab, "设备列表");
-    rightTabWidget->addTab(new QWidget(), "子模块列表");
+    rightTabWidget->addTab(moduleTab, "子模块列表");
     rightTabWidget->addTab(new QWidget(), "在线");
     
     splitter->addWidget(rightTabWidget);
@@ -384,6 +396,7 @@ void MasterSimulationWidget::onProjectTreeDoubleClicked(QTreeWidgetItem *item, i
     }
     
     // Reset selection and display
+    m_assignedModules.clear();
     m_selectedSlotIndex = 0; // Default Select Slot 0
     displayDeviceSlots(m_currentStationInfo);
     showBasicConfig(m_currentStationInfo);
@@ -397,14 +410,58 @@ void MasterSimulationWidget::onSlotClicked(int slotIndex)
     displayDeviceSlots(m_currentStationInfo);
     
     if (slotIndex == 0) {
+        rightTabWidget->setCurrentIndex(0); // Show catalog or keep static?
         showBasicConfig(m_currentStationInfo);
     } else {
-        // Clear config area or show module config
+        // Show module config area (empty for now)
         while (QLayoutItem* item = configLayout->takeAt(0)) {
             if (item->widget()) delete item->widget();
             delete item;
         }
         configLayout->addWidget(new QLabel("模块配置 (Slot " + QString::number(slotIndex) + ")"));
+        
+        // Show available modules in right tab
+        rightTabWidget->setCurrentIndex(1); // "子模块列表"
+        updateModuleList(m_currentStationInfo);
+    }
+}
+
+void MasterSimulationWidget::updateModuleList(const PNConfigLib::GsdmlInfo &info)
+{
+    moduleTree->clear();
+    QTreeWidgetItem *category = new QTreeWidgetItem(moduleTree, QStringList() << "Category");
+    
+    for (int i = 0; i < info.modules.size(); ++i) {
+        QTreeWidgetItem *item = new QTreeWidgetItem(category, QStringList() << info.modules[i].name);
+        item->setData(0, Qt::UserRole, i);
+    }
+    
+    category->setExpanded(true);
+}
+
+void MasterSimulationWidget::onModuleContextMenu(const QPoint &pos)
+{
+    QTreeWidgetItem *item = moduleTree->itemAt(pos);
+    if (!item || item->parent() == nullptr) return; // Only for modules, not category
+
+    QMenu menu(this);
+    QAction *insertAction = menu.addAction("插入到插槽");
+    connect(insertAction, &QAction::triggered, this, &MasterSimulationWidget::onInsertModule);
+    menu.exec(moduleTree->mapToGlobal(pos));
+}
+
+void MasterSimulationWidget::onInsertModule()
+{
+    QTreeWidgetItem *item = moduleTree->currentItem();
+    if (!item || m_selectedSlotIndex <= 0) return;
+
+    int modIndex = item->data(0, Qt::UserRole).toInt();
+    if (modIndex >= 0 && modIndex < m_currentStationInfo.modules.size()) {
+        m_assignedModules[m_selectedSlotIndex] = m_currentStationInfo.modules[modIndex];
+        displayDeviceSlots(m_currentStationInfo);
+        statusLabel->setText(QString(" 已将模块 %1 插入到 Slot(0x%2)")
+            .arg(item->text(0))
+            .arg(m_selectedSlotIndex, 4, 16, QChar('0')));
     }
 }
 
@@ -420,10 +477,24 @@ void MasterSimulationWidget::displayDeviceSlots(const PNConfigLib::GsdmlInfo &in
     QStringList dapSubslots = {"Subslot(0x0001) " + info.deviceName, "Subslot(0x8000) X1", "Subslot(0x8001) X1 P1"};
     addSlot(slotLayout, 0, "Slot(0x0000)", info.deviceName, dapSubslots);
 
-    // Other slots are empty in initial state as requested
+    // Other slots
     for (int i = 1; i <= 8; ++i) {
         QString slotName = QString("Slot(0x%1)").arg(i, 4, 16, QChar('0'));
-        addSlot(slotLayout, i, slotName, "");
+        if (m_assignedModules.contains(i)) {
+            const auto& mod = m_assignedModules[i];
+            QStringList subslots = { QString("Subslot(0x0001) ") + mod.name };
+            
+            // Add IOData subslots if available
+            for (const auto& sub : mod.submodules) {
+                 if (sub.inputDataLength > 0 || sub.outputDataLength > 0) {
+                     subslots << QString("Subslot(0x%1) %2").arg(sub.submoduleIdentNumber, 4, 16, QChar('0')).arg(sub.name);
+                 }
+            }
+            
+            addSlot(slotLayout, i, slotName, mod.name, subslots);
+        } else {
+            addSlot(slotLayout, i, slotName, "");
+        }
     }
     
     slotLayout->addStretch();

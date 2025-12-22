@@ -35,6 +35,8 @@ private slots:
     void onRemoveFromConfiguration();
     void onProjectTreeDoubleClicked(QTreeWidgetItem *item, int column);
     void onSlotClicked(int slotIndex);
+    void onModuleContextMenu(const QPoint &pos);
+    void onInsertModule();
 
 private:
     void setupUi();
@@ -47,6 +49,7 @@ private:
     void updateDeviceDetail(const PNConfigLib::GsdmlInfo &info);
     void displayDeviceSlots(const PNConfigLib::GsdmlInfo &info);
     void showBasicConfig(const PNConfigLib::GsdmlInfo &info);
+    void updateModuleList(const PNConfigLib::GsdmlInfo &info);
     QString formatIdent(uint32_t val);
 
     QToolBar *toolbar;
@@ -66,9 +69,11 @@ private:
     
     PNConfigLib::GsdmlInfo m_currentStationInfo;
     int m_selectedSlotIndex = -1;
+    QMap<int, PNConfigLib::ModuleInfo> m_assignedModules;
     
     // Right panel
     QTabWidget *rightTabWidget;
+    QTreeWidget *moduleTree;
     QTreeWidget *catalogTree;
     QScrollArea *catalogDetailArea;
     QWidget *catalogDetailContent;
