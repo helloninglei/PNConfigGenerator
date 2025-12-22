@@ -171,10 +171,18 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
         if (dapItem) {
             info.deviceAccessPointId = getAttribute(dapItem, "ID");
             
-            // Extract Device Name from ModuleInfo
+            // Extract Device Name from ModuleInfo/Name/@TextId or @Value
             XMLElement* modInfo = dapItem->FirstChildElement("ModuleInfo");
             if (modInfo) {
-                info.deviceName = resolve(getAttribute(modInfo, "Name"));
+                XMLElement* nameElem = modInfo->FirstChildElement("Name");
+                if (nameElem) {
+                    QString textId = getAttribute(nameElem, "TextId");
+                    if (!textId.isEmpty()) {
+                        info.deviceName = resolve(textId);
+                    } else {
+                        info.deviceName = getAttribute(nameElem, "Value");
+                    }
+                }
             }
             if (info.deviceName.isEmpty()) {
                 info.deviceName = info.deviceAccessPointId;
@@ -203,10 +211,18 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
                     identStr.mid(2).toUInt(nullptr, 16) : identStr.toUInt();
             }
             
-            // Module Info
+            // Module Info: Name via TextId child
             XMLElement* modInfo = moduleItem->FirstChildElement("ModuleInfo");
             if (modInfo) {
-                module.name = resolve(getAttribute(modInfo, "Name"));
+                XMLElement* nameElem = modInfo->FirstChildElement("Name");
+                if (nameElem) {
+                    QString textId = getAttribute(nameElem, "TextId");
+                    if (!textId.isEmpty()) {
+                        module.name = resolve(textId);
+                    } else {
+                        module.name = getAttribute(nameElem, "Value");
+                    }
+                }
             }
             
             // Virtual Submodules
@@ -225,7 +241,15 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
                     
                     XMLElement* smInfo = subItem->FirstChildElement("ModuleInfo");
                     if (smInfo) {
-                        submodule.name = resolve(getAttribute(smInfo, "Name"));
+                        XMLElement* nameElem = smInfo->FirstChildElement("Name");
+                        if (nameElem) {
+                            QString textId = getAttribute(nameElem, "TextId");
+                            if (!textId.isEmpty()) {
+                                submodule.name = resolve(textId);
+                            } else {
+                                submodule.name = getAttribute(nameElem, "Value");
+                            }
+                        }
                     }
                     
                     // Parse IOData
