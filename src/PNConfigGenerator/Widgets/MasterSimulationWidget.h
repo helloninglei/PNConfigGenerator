@@ -54,6 +54,9 @@ private:
 
     QToolBar *toolbar;
     QComboBox *nicComboBox;
+    QAction *m_scanAction;
+    QAction *m_connectAction;
+    bool m_isConnected = false;
     
     QTreeWidget *projectTree;
     QTreeWidgetItem *stationsItem;

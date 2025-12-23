@@ -50,6 +50,10 @@ add_library(PNConfigLib STATIC
     Consistency/ConsistencyManager.h
     Consistency/ConsistencyManager.cpp
 
+    # Network
+    Network/DcpScanner.h
+    Network/DcpScanner.cpp
+
     # TinyXML2
     tinyxml2/tinyxml2.h
     tinyxml2/tinyxml2.cpp

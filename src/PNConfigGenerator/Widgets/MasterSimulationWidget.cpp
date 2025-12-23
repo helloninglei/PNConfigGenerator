@@ -59,12 +59,6 @@ void MasterSimulationWidget::createToolbar()
     toolbar->setIconSize(QSize(20, 20));
     toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
 
-    // Mock Icons using Standard Icons
-    QAction *scanAction = toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_BrowserReload), "搜索设备");
-    connect(scanAction, &QAction::triggered, this, &MasterSimulationWidget::onScanClicked);
-    
-    toolbar->addSeparator();
-    
     toolbar->addWidget(new QLabel(" 网卡: "));
     nicComboBox = new QComboBox(this);
     nicComboBox->setMinimumWidth(250);
@@ -72,7 +66,6 @@ void MasterSimulationWidget::createToolbar()
     // Dynamically populate available network interfaces
     QList<QNetworkInterface> interfaces = QNetworkInterface::allInterfaces();
     for (const QNetworkInterface &interface : interfaces) {
-        // Skip loopback and inactive interfaces for a cleaner list
         if (interface.flags().testFlag(QNetworkInterface::IsLoopBack))
             continue;
             
@@ -82,32 +75,19 @@ void MasterSimulationWidget::createToolbar()
         nicComboBox->addItem(displayName, interface.name());
     }
     
-    // If no real interfaces found, add mock ones as seen in the design
     if (nicComboBox->count() == 0) {
         nicComboBox->addItem("WLAN");
-        nicComboBox->addItem("本地连接* 10");
-        nicComboBox->addItem("本地连接* 9");
-        nicComboBox->addItem("VirtualBox Host-Only Network");
         nicComboBox->addItem("Meta");
     }
     
     toolbar->addWidget(nicComboBox);
     
-    toolbar->addSeparator();
+    m_connectAction = toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_DialogOkButton), "建立连接");
+    connect(m_connectAction, &QAction::triggered, this, &MasterSimulationWidget::onConnectClicked);
 
-    QAction *connectAction = toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_DialogOkButton), "建立连接");
-    connect(connectAction, &QAction::triggered, this, &MasterSimulationWidget::onConnectClicked);
-    
-    QAction *stopAction = toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_DialogCancelButton), "停止");
-    
-    toolbar->addSeparator();
-
-    QAction *importAction = toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_FileIcon), "导入GSDML");
-    connect(importAction, &QAction::triggered, this, &MasterSimulationWidget::onImportGsdml);
-    
-    toolbar->addSeparator();
-    
-    toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_MessageBoxInformation), "属性");
+    m_scanAction = toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_FileDialogContentsView), "搜索设备");
+    m_scanAction->setEnabled(false);
+    connect(m_scanAction, &QAction::triggered, this, &MasterSimulationWidget::onScanClicked);
 }
 
 void MasterSimulationWidget::createLeftPanel(QSplitter *splitter)
@@ -721,9 +701,22 @@ void MasterSimulationWidget::onImportGsdml()
 void MasterSimulationWidget::onScanClicked()
 {
     statusLabel->setText(" 正在扫描网络中的 PROFINET 设备...");
+    // Future: Use DcpScanner to perform actual scan
 }
 
 void MasterSimulationWidget::onConnectClicked()
 {
-    statusLabel->setText(" 正在与 rt-labs-dev 建立连接...");
+    m_isConnected = !m_isConnected;
+    
+    if (m_isConnected) {
+        m_connectAction->setText("断开连接");
+        m_connectAction->setIcon(qApp->style()->standardIcon(QStyle::SP_DialogCancelButton));
+        m_scanAction->setEnabled(true);
+        statusLabel->setText(QString(" 已连接到: %1").arg(nicComboBox->currentText()));
+    } else {
+        m_connectAction->setText("建立连接");
+        m_connectAction->setIcon(qApp->style()->standardIcon(QStyle::SP_DialogOkButton));
+        m_scanAction->setEnabled(false);
+        statusLabel->setText(" 已断开连接");
+    }
 }
