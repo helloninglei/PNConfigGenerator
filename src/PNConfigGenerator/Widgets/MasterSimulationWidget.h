@@ -15,7 +15,14 @@
 #include <QTabWidget>
 #include <QToolBar>
 #include <QScrollArea>
+#include <QPoint>
 #include "../PNConfigLib/GsdmlParser/GsdmlParser.h"
+
+namespace PNConfigLib {
+    class GsdmlInfo;
+    class DcpScanner;
+    struct DiscoveredDevice;
+}
 
 class MasterSimulationWidget : public QWidget
 {
@@ -37,6 +44,8 @@ private slots:
     void onSlotClicked(int slotIndex);
     void onModuleContextMenu(const QPoint &pos);
     void onInsertModule();
+    void onOnlineContextMenu(const QPoint &pos);
+    void onSetIp();
 
 private:
     void setupUi();
@@ -60,6 +69,9 @@ private:
     
     QTreeWidget *projectTree;
     QTreeWidgetItem *stationsItem;
+    
+    QTreeWidget *onlineTree;
+    PNConfigLib::DcpScanner *m_scanner;
     
     // Center panel
     QSplitter *centerSplitter;

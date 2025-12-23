@@ -59,12 +59,31 @@ add_library(PNConfigLib STATIC
     tinyxml2/tinyxml2.cpp
 )
 
-target_link_libraries(PNConfigLib
-    PUBLIC
-        Qt6::Core
-)
+# Npcap/pcap paths
+set(NPCAP_DIR ${CMAKE_SOURCE_DIR}/example/pn_driver/src/driver/Npcap)
+set(NPCAP_INCLUDE_DIR ${NPCAP_DIR}/Include)
+set(NPCAP_LIB_DIR ${NPCAP_DIR}/Lib/x64)
 
 target_include_directories(PNConfigLib
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${NPCAP_INCLUDE_DIR}
+)
+
+target_link_directories(PNConfigLib
+    PUBLIC
+        ${NPCAP_LIB_DIR}
+)
+
+target_link_libraries(PNConfigLib
+    PUBLIC
+        Qt6::Core
+        wpcap
+        Packet
+)
+
+target_compile_definitions(PNConfigLib
+    PUBLIC
+        WPCAP
+        HAVE_REMOTE
 )

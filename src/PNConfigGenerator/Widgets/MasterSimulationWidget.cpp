@@ -1,4 +1,5 @@
 #include "MasterSimulationWidget.h"
+#include "Network/DcpScanner.h"
 #include <QHeaderView>
 #include <QAction>
 #include <QApplication>
@@ -14,10 +15,13 @@
 #include <QPushButton>
 #include <QFormLayout>
 #include <QListWidget>
+#include <QInputDialog>
+#include <QTimer>
 
 MasterSimulationWidget::MasterSimulationWidget(QWidget *parent)
     : QWidget(parent)
 {
+    m_scanner = new PNConfigLib::DcpScanner(this);
     setupUi();
     refreshCatalog();
 }
@@ -63,21 +67,15 @@ void MasterSimulationWidget::createToolbar()
     nicComboBox = new QComboBox(this);
     nicComboBox->setMinimumWidth(250);
     
-    // Dynamically populate available network interfaces
-    QList<QNetworkInterface> interfaces = QNetworkInterface::allInterfaces();
-    for (const QNetworkInterface &interface : interfaces) {
-        if (interface.flags().testFlag(QNetworkInterface::IsLoopBack))
-            continue;
-            
-        QString displayName = interface.humanReadableName();
-        if (displayName.isEmpty()) displayName = interface.name();
-        
-        nicComboBox->addItem(displayName, interface.name());
+    // Dynamically populate available network interfaces using Npcap directly
+    QList<PNConfigLib::InterfaceInfo> interfaces = PNConfigLib::DcpScanner::getAvailableInterfaces();
+    for (const auto &iface : interfaces) {
+        nicComboBox->addItem(iface.description, iface.name);
     }
     
     if (nicComboBox->count() == 0) {
-        nicComboBox->addItem("WLAN");
-        nicComboBox->addItem("Meta");
+        // Fallback for UI visualization if no real interfaces found
+        nicComboBox->addItem("未找到可用网卡", "");
     }
     
     toolbar->addWidget(nicComboBox);
@@ -195,9 +193,22 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     
     moduleTabLayout->addWidget(moduleTree);
     
+    QWidget *onlineTab = new QWidget(this);
+    QVBoxLayout *onlineTabLayout = new QVBoxLayout(onlineTab);
+    onlineTabLayout->setContentsMargins(0, 0, 0, 0);
+
+    onlineTree = new QTreeWidget(this);
+    onlineTree->setHeaderLabels({"MAC 地址", "设备名称", "设备类型", "IP 地址", "子网掩码"});
+    onlineTree->setColumnWidth(0, 140);
+    onlineTree->setColumnWidth(1, 150);
+    onlineTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(onlineTree, &QTreeWidget::customContextMenuRequested, this, &MasterSimulationWidget::onOnlineContextMenu);
+
+    onlineTabLayout->addWidget(onlineTree);
+    
     rightTabWidget->addTab(catalogTab, "设备列表");
     rightTabWidget->addTab(moduleTab, "子模块列表");
-    rightTabWidget->addTab(new QWidget(), "在线");
+    rightTabWidget->addTab(onlineTab, "在线");
     
     splitter->addWidget(rightTabWidget);
 
@@ -700,23 +711,86 @@ void MasterSimulationWidget::onImportGsdml()
 
 void MasterSimulationWidget::onScanClicked()
 {
+    if (!m_scanner->isConnected()) return;
+
     statusLabel->setText(" 正在扫描网络中的 PROFINET 设备...");
-    // Future: Use DcpScanner to perform actual scan
+    onlineTree->clear();
+    
+    QList<PNConfigLib::DiscoveredDevice> devices = m_scanner->scan();
+    for (const auto &device : devices) {
+        QTreeWidgetItem *item = new QTreeWidgetItem(onlineTree);
+        item->setText(0, device.macAddress);
+        item->setText(1, device.deviceName);
+        item->setText(2, device.deviceType);
+        item->setText(3, device.ipAddress);
+        item->setText(4, device.subnetMask);
+        item->setData(0, Qt::UserRole, device.gateway);
+    }
+    
+    if (devices.isEmpty()) {
+        statusLabel->setText(" 未发现 PROFINET 设备");
+    } else {
+        statusLabel->setText(QString(" 发现 %1 个 PROFINET 设备").arg(devices.size()));
+        rightTabWidget->setCurrentIndex(2); // Switch to Online tab
+    }
 }
 
 void MasterSimulationWidget::onConnectClicked()
 {
-    m_isConnected = !m_isConnected;
-    
-    if (m_isConnected) {
-        m_connectAction->setText("断开连接");
-        m_connectAction->setIcon(qApp->style()->standardIcon(QStyle::SP_DialogCancelButton));
-        m_scanAction->setEnabled(true);
-        statusLabel->setText(QString(" 已连接到: %1").arg(nicComboBox->currentText()));
+    if (!m_isConnected) {
+        QString interfaceName = nicComboBox->currentData().toString();
+        if (m_scanner->connectToInterface(interfaceName)) {
+            m_isConnected = true;
+            m_connectAction->setText("断开连接");
+            m_connectAction->setIcon(qApp->style()->standardIcon(QStyle::SP_DialogCancelButton));
+            m_scanAction->setEnabled(true);
+            statusLabel->setText(QString(" 已连接到: %1").arg(nicComboBox->currentText()));
+        } else {
+            QMessageBox::critical(this, "连接错误", "无法连接到选定的网卡。");
+        }
     } else {
+        m_scanner->disconnectFromInterface();
+        m_isConnected = false;
         m_connectAction->setText("建立连接");
         m_connectAction->setIcon(qApp->style()->standardIcon(QStyle::SP_DialogOkButton));
         m_scanAction->setEnabled(false);
         statusLabel->setText(" 已断开连接");
+    }
+}
+
+void MasterSimulationWidget::onOnlineContextMenu(const QPoint &pos)
+{
+    QTreeWidgetItem *item = onlineTree->itemAt(pos);
+    if (!item) return;
+
+    QMenu menu(this);
+    QAction *setIpAction = menu.addAction("修改 IP 地址");
+    connect(setIpAction, &QAction::triggered, this, &MasterSimulationWidget::onSetIp);
+    
+    menu.exec(onlineTree->mapToGlobal(pos));
+}
+
+void MasterSimulationWidget::onSetIp()
+{
+    QTreeWidgetItem *item = onlineTree->currentItem();
+    if (!item) return;
+
+    QString mac = item->text(0);
+    QString currentIp = item->text(3);
+    QString currentMask = item->text(4);
+    QString currentGw = item->data(0, Qt::UserRole).toString();
+
+    bool ok;
+    QString newIp = QInputDialog::getText(this, "修改 IP 地址", 
+        QString("请输入设备 %1 的新 IP 地址:").arg(mac), QLineEdit::Normal, currentIp, &ok);
+    
+    if (ok && !newIp.isEmpty()) {
+        if (m_scanner->setDeviceIp(mac, newIp, currentMask, currentGw)) {
+            statusLabel->setText(QString(" 已发送 IP 修改请求: %1 -> %2").arg(mac, newIp));
+            // Re-scan after a short delay
+            QTimer::singleShot(2000, this, &MasterSimulationWidget::onScanClicked);
+        } else {
+            QMessageBox::warning(this, "设置错误", "无法发送 IP 修改请求。");
+        }
     }
 }
