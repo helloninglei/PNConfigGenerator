@@ -483,13 +483,11 @@ void MasterSimulationWidget::displayDeviceSlots(const PNConfigLib::GsdmlInfo &in
         QString slotName = QString("Slot(0x%1)").arg(i, 4, 16, QChar('0'));
         if (m_assignedModules.contains(i)) {
             const auto& mod = m_assignedModules[i];
-            QStringList subslots = { QString("Subslot(0x0001) ") + mod.name };
+            QStringList subslots;
             
-            // Add IOData subslots if available
+            // Add all submodules from GSDML
             for (const auto& sub : mod.submodules) {
-                 if (sub.inputDataLength > 0 || sub.outputDataLength > 0) {
-                     subslots << QString("Subslot(0x%1) %2").arg(sub.submoduleIdentNumber, 4, 16, QChar('0')).arg(sub.name);
-                 }
+                subslots << QString("Subslot(0x%1) %2").arg(sub.submoduleIdentNumber, 4, 16, QChar('0')).arg(sub.name);
             }
             
             addSlot(slotLayout, i, slotName, mod.name, subslots);
