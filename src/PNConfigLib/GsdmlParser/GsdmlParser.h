@@ -10,6 +10,7 @@
 #include <QHash>
 #include <QDateTime>
 #include <QMutex>
+#include <cstdint>
 
 namespace PNConfigLib {
 
@@ -52,6 +53,7 @@ struct GsdmlInfo {
     uint32_t vendorId = 0;      // Numeric vendor ID from GSDML
     uint32_t deviceId = 0;      // Numeric device ID from GSDML
     uint32_t dapModuleId = 0;   // DAP ModuleIdentNumber
+    int physicalSlots = 0;       // Max slot number from PhysicalSlots attribute
     QVector<ModuleInfo> modules;
     QDateTime lastModified;
 };

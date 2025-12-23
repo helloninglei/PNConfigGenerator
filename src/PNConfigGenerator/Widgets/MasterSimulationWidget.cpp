@@ -144,8 +144,8 @@ void MasterSimulationWidget::createCenterPanel(QSplitter *splitter)
     slotLayout = new QVBoxLayout(slotContainer);
     slotLayout->setAlignment(Qt::AlignTop);
     
-    // Add some initial empty slots
-    for (int i = 0; i <= 8; ++i) {
+    // Add initial empty slots (default to 4 for a clean start)
+    for (int i = 0; i <= 4; ++i) {
         QString slotName = QString("Slot(0x%1)").arg(i, 4, 16, QChar('0'));
         addSlot(slotLayout, i, slotName, "Empty Slot");
     }
@@ -389,6 +389,7 @@ void MasterSimulationWidget::onProjectTreeDoubleClicked(QTreeWidgetItem *item, i
         // Mock slots for samples
         m_currentStationInfo = PNConfigLib::GsdmlInfo();
         m_currentStationInfo.deviceName = "P-Net multi-module sample app";
+        m_currentStationInfo.physicalSlots = 4; // Mock max slot
         
         PNConfigLib::ModuleInfo m1;
         m1.name = "DO 8xLogicLevel";
@@ -478,7 +479,7 @@ void MasterSimulationWidget::displayDeviceSlots(const PNConfigLib::GsdmlInfo &in
     addSlot(slotLayout, 0, "Slot(0x0000)", info.deviceName, dapSubslots);
 
     // Other slots
-    for (int i = 1; i <= 8; ++i) {
+    for (int i = 1; i <= info.physicalSlots; ++i) {
         QString slotName = QString("Slot(0x%1)").arg(i, 4, 16, QChar('0'));
         if (m_assignedModules.contains(i)) {
             const auto& mod = m_assignedModules[i];

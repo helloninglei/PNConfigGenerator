@@ -194,6 +194,17 @@ GsdmlInfo GsdmlParser::parseGSDMLFile(const QString& gsdmlPath)
                 info.dapModuleId = dapModuleIdStr.startsWith("0x") ?
                     dapModuleIdStr.mid(2).toUInt(nullptr, 16) : dapModuleIdStr.toUInt();
             }
+
+            // Extract PhysicalSlots (e.g. "0..4")
+            QString physicalSlotsStr = getAttribute(dapItem, "PhysicalSlots");
+            if (!physicalSlotsStr.isEmpty()) {
+                // Split by ".." and take the last part
+                QStringList parts = physicalSlotsStr.split("..");
+                bool ok = false;
+                int val = parts.last().toInt(&ok);
+                if (ok) info.physicalSlots = val;
+            }
+            if (info.physicalSlots <= 0) info.physicalSlots = 8; // Default fallback
         }
     }
     
