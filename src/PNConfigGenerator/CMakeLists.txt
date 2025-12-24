@@ -21,6 +21,8 @@ set(SOURCES
     Widgets/TopologyEditor.h
     Widgets/MasterSimulationWidget.cpp
     Widgets/MasterSimulationWidget.h
+    Widgets/OnlineDiscoveryDialog.cpp
+    Widgets/OnlineDiscoveryDialog.h
 )
 
 add_executable(PNConfigGenerator ${SOURCES})

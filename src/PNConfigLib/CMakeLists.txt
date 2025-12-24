@@ -78,8 +78,10 @@ target_link_directories(PNConfigLib
 target_link_libraries(PNConfigLib
     PUBLIC
         Qt6::Core
+        Qt6::Network
         wpcap
         Packet
+        iphlpapi
 )
 
 target_compile_definitions(PNConfigLib

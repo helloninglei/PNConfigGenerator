@@ -9,6 +9,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QLineEdit>
+#include "OnlineDiscoveryDialog.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGroupBox>
@@ -86,6 +87,12 @@ void MasterSimulationWidget::createToolbar()
     m_scanAction = toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_FileDialogContentsView), "搜索设备");
     m_scanAction->setEnabled(false);
     connect(m_scanAction, &QAction::triggered, this, &MasterSimulationWidget::onScanClicked);
+
+    toolbar->addSeparator();
+
+    QAction *discoveryAction = toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_DriveNetIcon), "在线扫描发现 (TIA Style)");
+    discoveryAction->setToolTip("TIA Portal 风格的在线设备扫描与配置");
+    connect(discoveryAction, &QAction::triggered, this, &MasterSimulationWidget::onOnlineDiscovery);
 }
 
 void MasterSimulationWidget::createLeftPanel(QSplitter *splitter)
@@ -706,6 +713,17 @@ void MasterSimulationWidget::onImportGsdml()
         refreshCatalog();
     } else {
         QMessageBox::warning(this, "导入错误", "无法导入 GSDML 文件，请检查文件格式。");
+    }
+}
+
+void MasterSimulationWidget::onOnlineDiscovery()
+{
+    OnlineDiscoveryDialog dialog(m_scanner, this);
+    dialog.exec();
+    
+    // Refresh the local online tree after dialog closes if something changed
+    if (m_isConnected) {
+        onScanClicked();
     }
 }
 

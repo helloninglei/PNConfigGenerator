@@ -60,6 +60,8 @@ public:
 
     QList<DiscoveredDevice> scan();
     bool setDeviceIp(const QString &mac, const QString &ip, const QString &mask, const QString &gw);
+    bool setDeviceName(const QString &mac, const QString &name);
+    bool flashLed(const QString &mac);
 
 private:
     void parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDevice> &devices);
@@ -67,6 +69,7 @@ private:
 
     bool m_isConnected = false;
     QString m_interfaceName;
+    uint8_t m_sourceMac[6] = {0};
     pcap_t *m_pcapHandle = nullptr;
 };
 

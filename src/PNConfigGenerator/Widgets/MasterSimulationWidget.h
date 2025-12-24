@@ -46,6 +46,7 @@ private slots:
     void onInsertModule();
     void onOnlineContextMenu(const QPoint &pos);
     void onSetIp();
+    void onOnlineDiscovery();
 
 private:
     void setupUi();
