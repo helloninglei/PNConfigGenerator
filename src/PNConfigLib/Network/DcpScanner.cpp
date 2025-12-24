@@ -267,22 +267,38 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
     while (remaining >= 4) {
         DcpBlockHeader *block = (DcpBlockHeader*)(data + offset);
         int blockLen = qFromBigEndian<uint16_t>(block->length);
-        const uint8_t *val = data + offset + 4;
+        
+        // Ensure we don't read past the packet
+        if (offset + 4 + blockLen > len) break;
 
-        if (block->option == 0x02) { // IP
-            if (block->suboption == 0x01 && blockLen >= 12) {
-                device.ipAddress = QString("%1.%2.%3.%4").arg(val[2]).arg(val[3]).arg(val[4]).arg(val[5]);
-                device.subnetMask = QString("%1.%2.%3.%4").arg(val[6]).arg(val[7]).arg(val[8]).arg(val[9]);
-                device.gateway = QString("%1.%2.%3.%4").arg(val[10]).arg(val[11]).arg(val[12]).arg(val[13]);
-                qDebug() << "  IP Info:" << device.ipAddress << device.subnetMask << device.gateway;
+        // Pointer to data after Block Header (Option/Suboption/Length)
+        const uint8_t *val = data + offset + 4;
+        
+        // PROFINET DCP Blocks always start with 2 bytes of BlockInfo (Status), skip them
+        const uint8_t *payload = val + 2;
+        int payloadLen = blockLen - 2;
+
+        if (block->option == 0x02) { // IP (or non-standard string properties)
+            // Standard IP block must be exactly 14 bytes (2 Info + 4 IP + 4 Subnet + 4 GW)
+            if (block->suboption == 0x01 && blockLen == 14) {
+                device.ipAddress = QString("%1.%2.%3.%4").arg(payload[0]).arg(payload[1]).arg(payload[2]).arg(payload[3]);
+                device.subnetMask = QString("%1.%2.%3.%4").arg(payload[4]).arg(payload[5]).arg(payload[6]).arg(payload[7]);
+                device.gateway = QString("%1.%2.%3.%4").arg(payload[8]).arg(payload[9]).arg(payload[10]).arg(payload[11]);
+            } else if (block->suboption == 0x01 && payloadLen > 5) {
+                // FALLBACK: Some samples put Type of Station here
+                if (device.deviceType.isEmpty()) device.deviceType = QString::fromUtf8((const char*)payload, payloadLen).trimmed();
+            } else if (block->suboption == 0x02 && payloadLen > 5) {
+                // FALLBACK: Some samples put Name of Station here
+                if (device.deviceName.isEmpty() || device.deviceName.contains('\0')) 
+                    device.deviceName = QString::fromUtf8((const char*)payload, payloadLen).trimmed();
             }
         } else if (block->option == 0x01) { // Device Properties
-            if (block->suboption == 0x02) { // Name
-                device.deviceName = QString::fromUtf8((const char*)val, blockLen);
-                qDebug() << "  Device Name:" << device.deviceName;
-            } else if (block->suboption == 0x01) { // Type
-                 device.deviceType = QString::fromUtf8((const char*)val, blockLen);
-                 qDebug() << "  Device Type:" << device.deviceType;
+            if (block->suboption == 0x02 && payloadLen > 0) { // Name
+                QString name = QString::fromUtf8((const char*)payload, payloadLen).trimmed();
+                if (!name.isEmpty() && name[0] != '\0') device.deviceName = name;
+            } else if (block->suboption == 0x01 && payloadLen > 0) { // Type
+                QString type = QString::fromUtf8((const char*)payload, payloadLen).trimmed();
+                if (!type.isEmpty() && type[0] != '\0') device.deviceType = type;
             }
         }
 
