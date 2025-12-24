@@ -147,9 +147,9 @@ bool DcpScanner::connectToInterface(const QString &interfaceName) {
                    << ". Please select a PHYSICAL adapter (not WAN Miniport) for PROFINET.";
     }
 
-    // Set BPF filter to only capture PROFINET EtherType (0x8892)
+    // Set BPF filter to capture PROFINET (0x8892) and LLDP (0x88cc)
     struct bpf_program fcode;
-    if (pcap_compile(m_pcapHandle, &fcode, "ether proto 0x8892", 1, PCAP_NETMASK_UNKNOWN) == -1) {
+    if (pcap_compile(m_pcapHandle, &fcode, "ether proto 0x8892 or ether proto 0x88cc", 1, PCAP_NETMASK_UNKNOWN) == -1) {
         qWarning() << "Error compiling BPF filter:" << pcap_geterr(m_pcapHandle);
     } else {
         if (pcap_setfilter(m_pcapHandle, &fcode) == -1) {
@@ -203,6 +203,14 @@ QList<DiscoveredDevice> DcpScanner::scan() {
     block->length = 0x0000;
 
     qDebug() << "Sending DCP Identify multicast request (Source MAC:" << macToString(m_sourceMac) << ")...";
+    
+    // Hex dump for debugging
+    QString hexDump;
+    for (int i = 0; i < (int)sizeof(packet); ++i) {
+        hexDump += QString("%1 ").arg(packet[i], 2, 16, QChar('0')).toUpper();
+    }
+    qDebug() << "  Raw packet hex:" << hexDump;
+
     if (pcap_sendpacket(m_pcapHandle, packet, sizeof(packet)) != 0) {
         qCritical() << "Error sending DCP Identify request:" << pcap_geterr(m_pcapHandle);
         return devices;
@@ -216,8 +224,8 @@ QList<DiscoveredDevice> DcpScanner::scan() {
     timer.start();
     
     int capturedCount = 0;
-    // Capture for 2 seconds
-    while (timer.elapsed() < 2000) {
+    // Capture for 5 seconds (to allow for ResponseDelay)
+    while (timer.elapsed() < 5000) {
         res = pcap_next_ex(m_pcapHandle, &header, &data);
         if (res == 1) {
             capturedCount++;
@@ -241,6 +249,12 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
 
     EthernetHeader *eth = (EthernetHeader*)data;
     uint16_t type = qFromBigEndian<uint16_t>(eth->type);
+    
+    if (type == 0x88CC) {
+        qDebug() << "Captured LLDP Heartbeat (0x88CC) from MAC:" << macToString(eth->src);
+        return;
+    }
+    
     if (type != 0x8892) return;
 
     DcpHeader *dcp = (DcpHeader*)(data + sizeof(EthernetHeader));
@@ -252,6 +266,14 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
 
     // 0xFEFF is Identify Response
     if (frameId != 0xFEFF) {
+        // Log small hex dump for investigation if it's not our own FEFE request
+        if (frameId != 0xFEFE) {
+            QString hex;
+            for (int i = 0; i < (len < 32 ? len : 32); ++i) {
+                hex += QString("%1 ").arg(data[i], 2, 16, QChar('0')).toUpper();
+            }
+            qDebug() << "  Unhandled FrameID hex (first 32b):" << hex;
+        }
         return;
     }
 
