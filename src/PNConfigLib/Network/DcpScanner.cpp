@@ -147,9 +147,9 @@ bool DcpScanner::connectToInterface(const QString &interfaceName) {
                    << ". Please select a PHYSICAL adapter (not WAN Miniport) for PROFINET.";
     }
 
-    // Set BPF filter to capture PROFINET (0x8892) and LLDP (0x88cc)
+    // Set BPF filter to capture PROFINET (0x8892)
     struct bpf_program fcode;
-    if (pcap_compile(m_pcapHandle, &fcode, "ether proto 0x8892 or ether proto 0x88cc", 1, PCAP_NETMASK_UNKNOWN) == -1) {
+    if (pcap_compile(m_pcapHandle, &fcode, "ether proto 0x8892", 1, PCAP_NETMASK_UNKNOWN) == -1) {
         qWarning() << "Error compiling BPF filter:" << pcap_geterr(m_pcapHandle);
     } else {
         if (pcap_setfilter(m_pcapHandle, &fcode) == -1) {
@@ -203,13 +203,6 @@ QList<DiscoveredDevice> DcpScanner::scan() {
     block->length = 0x0000;
 
     qDebug() << "Sending DCP Identify multicast request (Source MAC:" << macToString(m_sourceMac) << ")...";
-    
-    // Hex dump for debugging
-    QString hexDump;
-    for (int i = 0; i < (int)sizeof(packet); ++i) {
-        hexDump += QString("%1 ").arg(packet[i], 2, 16, QChar('0')).toUpper();
-    }
-    qDebug() << "  Raw packet hex:" << hexDump;
 
     if (pcap_sendpacket(m_pcapHandle, packet, sizeof(packet)) != 0) {
         qCritical() << "Error sending DCP Identify request:" << pcap_geterr(m_pcapHandle);
@@ -250,34 +243,16 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
     EthernetHeader *eth = (EthernetHeader*)data;
     uint16_t type = qFromBigEndian<uint16_t>(eth->type);
     
-    if (type == 0x88CC) {
-        qDebug() << "Captured LLDP Heartbeat (0x88CC) from MAC:" << macToString(eth->src);
-        return;
-    }
-    
-    if (type != 0x8892) return;
-
     DcpHeader *dcp = (DcpHeader*)(data + sizeof(EthernetHeader));
     uint16_t frameId = qFromBigEndian<uint16_t>(dcp->frameId);
     
-    qDebug() << "Received PROFINET packet (0x8892) - Source:" << macToString(eth->src) 
-             << "FrameID:" << QString("0x%1").arg(frameId, 4, 16, QChar('0')).toUpper()
-             << "Service:" << (int)dcp->serviceId << "Type:" << (int)dcp->serviceType;
-
     // 0xFEFF is Identify Response
     if (frameId != 0xFEFF) {
-        // Log small hex dump for investigation if it's not our own FEFE request
-        if (frameId != 0xFEFE) {
-            QString hex;
-            for (int i = 0; i < (len < 32 ? len : 32); ++i) {
-                hex += QString("%1 ").arg(data[i], 2, 16, QChar('0')).toUpper();
-            }
-            qDebug() << "  Unhandled FrameID hex (first 32b):" << hex;
-        }
         return;
     }
 
-    if (dcp->serviceId != 0x05 || dcp->serviceType != 0x02) {
+    // Some devices use ServiceType 0x01 (Success) instead of 0x02 (Response)
+    if (dcp->serviceId != 0x05) {
         return;
     }
 
