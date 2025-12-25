@@ -232,9 +232,9 @@ void ConfigReader::parsePNDriver(XMLElement* element, PNDriverType& driver)
     
     XMLElement* interfaceElem = element->FirstChildElement("Interface");
     while (interfaceElem) {
-        InterfaceType interface;
-        parseInterface(interfaceElem, interface);
-        driver.interfaces.append(interface);
+        InterfaceType iface;
+        parseInterface(interfaceElem, iface);
+        driver.interfaces.append(iface);
         interfaceElem = interfaceElem->NextSiblingElement("Interface");
     }
 }
@@ -248,18 +248,18 @@ void ConfigReader::parseDecentralDeviceNode(XMLElement* element, DecentralDevice
     
     XMLElement* interfaceElem = element->FirstChildElement("Interface");
     while (interfaceElem) {
-        InterfaceType interface;
-        parseInterface(interfaceElem, interface);
-        device.interfaces.append(interface);
+        InterfaceType iface;
+        parseInterface(interfaceElem, iface);
+        device.interfaces.append(iface);
         interfaceElem = interfaceElem->NextSiblingElement("Interface");
     }
 }
 
-void ConfigReader::parseInterface(XMLElement* element, InterfaceType& interface)
+void ConfigReader::parseInterface(XMLElement* element, InterfaceType& iface)
 {
-    interface.interfaceID = getAttribute(element, "InterfaceID");
-    interface.interfaceName = getAttribute(element, "InterfaceName");
-    interface.interfaceType = getAttribute(element, "InterfaceType");
+    iface.interfaceID = getAttribute(element, "InterfaceID");
+    iface.interfaceName = getAttribute(element, "InterfaceName");
+    iface.interfaceType = getAttribute(element, "InterfaceType");
 }
 
 } // namespace PNConfigLib

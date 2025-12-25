@@ -9,7 +9,6 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QLineEdit>
-#include "OnlineDiscoveryDialog.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGroupBox>
@@ -18,6 +17,75 @@
 #include <QListWidget>
 #include <QInputDialog>
 #include <QTimer>
+#include <QPainter>
+#include <QPainterPath>
+
+static QIcon createConnectIcon() {
+    QPixmap pix(24, 24);
+    pix.fill(Qt::transparent);
+    QPainter painter(&pix);
+    painter.setRenderHint(QPainter::Antialiasing);
+    
+    QPen pen(Qt::black, 2);
+    painter.setPen(pen);
+    
+    // Draw two horizontal line/plugs meeting in the middle
+    painter.drawLine(2, 12, 8, 12);   // Left cable
+    painter.drawLine(16, 12, 22, 12); // Right cable
+    
+    painter.setBrush(Qt::black);
+    painter.drawRect(8, 9, 3, 6);     // Left plug head
+    painter.drawRect(13, 9, 3, 6);    // Right plug head
+    
+    // Draw the "pins" meeting
+    painter.drawLine(11, 10, 13, 10);
+    painter.drawLine(11, 14, 13, 14);
+    
+    return QIcon(pix);
+}
+
+static QIcon createDisconnectIcon() {
+    QPixmap pix(24, 24);
+    pix.fill(Qt::transparent);
+    QPainter painter(&pix);
+    painter.setRenderHint(QPainter::Antialiasing);
+    
+    QPen pen(Qt::black, 2);
+    painter.setPen(pen);
+    
+    // Draw two horizontal line/plugs separated
+    painter.drawLine(2, 12, 7, 12);   // Left cable
+    painter.drawLine(17, 12, 22, 12); // Right cable
+    
+    painter.setBrush(Qt::black);
+    painter.drawRect(7, 9, 3, 6);     // Left plug head
+    painter.drawRect(14, 9, 3, 6);    // Right plug head
+    
+    // Draw the "pins" NOT meeting
+    painter.drawLine(10, 10, 11, 10);
+    painter.drawLine(10, 14, 11, 14);
+    
+    painter.drawLine(13, 10, 14, 10);
+    painter.drawLine(13, 14, 14, 14);
+    
+    return QIcon(pix);
+}
+
+static QIcon createSearchIcon() {
+    QPixmap pix(24, 24);
+    pix.fill(Qt::transparent);
+    QPainter painter(&pix);
+    painter.setRenderHint(QPainter::Antialiasing);
+    
+    QPen pen(Qt::black, 1.5);
+    painter.setPen(pen);
+    
+    // Draw magnifying glass
+    painter.drawEllipse(6, 6, 10, 10);
+    painter.drawLine(14, 14, 20, 20);
+    
+    return QIcon(pix);
+}
 
 MasterSimulationWidget::MasterSimulationWidget(QWidget *parent)
     : QWidget(parent)
@@ -63,36 +131,49 @@ void MasterSimulationWidget::createToolbar()
     toolbar = new QToolBar(this);
     toolbar->setIconSize(QSize(20, 20));
     toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    toolbar->setStyleSheet("QToolBar { spacing: 0px; border-bottom: 1px solid #c0c0c0; }");
 
-    toolbar->addWidget(new QLabel(" 网卡: "));
-    nicComboBox = new QComboBox(this);
-    nicComboBox->setMinimumWidth(250);
+    // Container for the network group
+    QWidget *netGroup = new QWidget(this);
+    netGroup->setStyleSheet(
+        "QWidget#netGroup { border: 1px solid #a0a0a0; background: #f8f8f8; }"
+        "QComboBox { border: none; padding-left: 5px; background: white; }"
+        "QPushButton { border: none; border-left: 1px solid #c0c0c0; padding: 2px; background: transparent; }"
+        "QPushButton:hover { background: #e0e0e0; }"
+        "QPushButton:checked { background: #c0c0c0; }"
+    );
+    netGroup->setObjectName("netGroup");
     
-    // Dynamically populate available network interfaces using Npcap directly
+    QHBoxLayout *netLayout = new QHBoxLayout(netGroup);
+    netLayout->setContentsMargins(0, 0, 0, 0);
+    netLayout->setSpacing(0);
+
+    nicComboBox = new QComboBox(netGroup);
+    nicComboBox->setMinimumWidth(180);
+    
     QList<PNConfigLib::InterfaceInfo> interfaces = PNConfigLib::DcpScanner::getAvailableInterfaces();
     for (const auto &iface : interfaces) {
         nicComboBox->addItem(iface.description, iface.name);
     }
-    
-    if (nicComboBox->count() == 0) {
-        // Fallback for UI visualization if no real interfaces found
-        nicComboBox->addItem("未找到可用网卡", "");
-    }
-    
-    toolbar->addWidget(nicComboBox);
-    
-    m_connectAction = toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_DialogOkButton), "建立连接");
-    connect(m_connectAction, &QAction::triggered, this, &MasterSimulationWidget::onConnectClicked);
+    if (nicComboBox->count() == 0) nicComboBox->addItem("未找到可用网卡", "");
+    netLayout->addWidget(nicComboBox);
 
-    m_scanAction = toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_FileDialogContentsView), "搜索设备");
-    m_scanAction->setEnabled(false);
-    connect(m_scanAction, &QAction::triggered, this, &MasterSimulationWidget::onScanClicked);
+    btnConnect = new QPushButton(createConnectIcon(), "", netGroup);
+    btnConnect->setCheckable(true);
+    btnConnect->setFixedSize(28, 24);
+    btnConnect->setToolTip("建立连接");
+    connect(btnConnect, &QPushButton::clicked, this, &MasterSimulationWidget::onConnectClicked);
+    netLayout->addWidget(btnConnect);
+    
+    btnScan = new QPushButton(createSearchIcon(), "", netGroup);
+    btnScan->setEnabled(false);
+    btnScan->setFixedSize(28, 24);
+    btnScan->setToolTip("搜索设备");
+    btnScan->setObjectName("btnScan");
+    connect(btnScan, &QPushButton::clicked, this, &MasterSimulationWidget::onScanClicked);
+    netLayout->addWidget(btnScan);
 
-    toolbar->addSeparator();
-
-    QAction *discoveryAction = toolbar->addAction(qApp->style()->standardIcon(QStyle::SP_DriveNetIcon), "在线扫描发现 (TIA Style)");
-    discoveryAction->setToolTip("TIA Portal 风格的在线设备扫描与配置");
-    connect(discoveryAction, &QAction::triggered, this, &MasterSimulationWidget::onOnlineDiscovery);
+    toolbar->addWidget(netGroup);
 }
 
 void MasterSimulationWidget::createLeftPanel(QSplitter *splitter)
@@ -770,18 +851,6 @@ void MasterSimulationWidget::onImportGsdml()
         QMessageBox::warning(this, "导入错误", "无法导入 GSDML 文件，请检查文件格式。");
     }
 }
-
-void MasterSimulationWidget::onOnlineDiscovery()
-{
-    OnlineDiscoveryDialog dialog(m_scanner, this);
-    dialog.exec();
-    
-    // Refresh the local online tree after dialog closes if something changed
-    if (m_isConnected) {
-        onScanClicked();
-    }
-}
-
 void MasterSimulationWidget::onScanClicked()
 {
     if (!m_scanner->isConnected()) return;
@@ -812,19 +881,21 @@ void MasterSimulationWidget::onConnectClicked()
         QString interfaceName = nicComboBox->currentData().toString();
         if (m_scanner->connectToInterface(interfaceName)) {
             m_isConnected = true;
-            m_connectAction->setText("断开连接");
-            m_connectAction->setIcon(qApp->style()->standardIcon(QStyle::SP_DialogCancelButton));
-            m_scanAction->setEnabled(true);
+            btnConnect->setChecked(true);
+            btnConnect->setIcon(createDisconnectIcon());
+            btnScan->setEnabled(true);
             statusLabel->setText(QString(" 已连接到: %1").arg(nicComboBox->currentText()));
         } else {
+            btnConnect->setChecked(false);
+            btnConnect->setIcon(createConnectIcon());
             QMessageBox::critical(this, "连接错误", "无法连接到选定的网卡。");
         }
     } else {
         m_scanner->disconnectFromInterface();
         m_isConnected = false;
-        m_connectAction->setText("建立连接");
-        m_connectAction->setIcon(qApp->style()->standardIcon(QStyle::SP_DialogOkButton));
-        m_scanAction->setEnabled(false);
+        btnConnect->setChecked(false);
+        btnConnect->setIcon(createConnectIcon());
+        btnScan->setEnabled(false);
         statusLabel->setText(" 已断开连接");
 
         // Clear online list and details

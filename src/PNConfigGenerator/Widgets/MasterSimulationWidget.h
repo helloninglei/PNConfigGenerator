@@ -17,6 +17,7 @@
 #include <QScrollArea>
 #include <QPoint>
 #include "../PNConfigLib/GsdmlParser/GsdmlParser.h"
+#include "../PNConfigLib/Network/DcpScanner.h"
 
 namespace PNConfigLib {
     class GsdmlInfo;
@@ -46,7 +47,6 @@ private slots:
     void onInsertModule();
     void onOnlineContextMenu(const QPoint &pos);
     void onSetIp();
-    void onOnlineDiscovery();
     void onOnlineTreeSelectionChanged();
 
 private:
@@ -65,8 +65,8 @@ private:
 
     QToolBar *toolbar;
     QComboBox *nicComboBox;
-    QAction *m_scanAction;
-    QAction *m_connectAction;
+    QPushButton *btnConnect;
+    QPushButton *btnScan;
     bool m_isConnected = false;
     
     QTreeWidget *projectTree;
@@ -113,5 +113,9 @@ private:
     QLabel *onlinePropRole;
     QLabel *onlinePropGsdml;
 };
+
+#include <QMetaType>
+Q_DECLARE_METATYPE(PNConfigLib::DiscoveredDevice)
+Q_DECLARE_METATYPE(QList<PNConfigLib::DiscoveredDevice>)
 
 #endif // MASTERSIMULATIONWIDGET_H

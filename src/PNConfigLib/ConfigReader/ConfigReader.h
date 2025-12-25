@@ -46,7 +46,7 @@ private:
     static void parseIOAddresses(tinyxml2::XMLElement* element, IOAddresses& addresses);
     static void parsePNDriver(tinyxml2::XMLElement* element, PNDriverType& driver);
     static void parseDecentralDeviceNode(tinyxml2::XMLElement* element, DecentralDeviceNode& device);
-    static void parseInterface(tinyxml2::XMLElement* element, InterfaceType& interface);
+    static void parseInterface(tinyxml2::XMLElement* element, InterfaceType& iface);
 };
 
 } // namespace PNConfigLib
