@@ -204,14 +204,65 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     QVBoxLayout *onlineTabLayout = new QVBoxLayout(onlineTab);
     onlineTabLayout->setContentsMargins(0, 0, 0, 0);
 
-    onlineTree = new QTreeWidget(this);
+    QSplitter *onlineSplitter = new QSplitter(Qt::Vertical, onlineTab);
+    
+    onlineTree = new QTreeWidget(onlineTab);
     onlineTree->setHeaderLabels({"MAC 地址", "设备名称", "设备类型", "IP 地址", "子网掩码"});
     onlineTree->setColumnWidth(0, 140);
     onlineTree->setColumnWidth(1, 150);
     onlineTree->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(onlineTree, &QTreeWidget::customContextMenuRequested, this, &MasterSimulationWidget::onOnlineContextMenu);
+    connect(onlineTree, &QTreeWidget::itemSelectionChanged, this, &MasterSimulationWidget::onOnlineTreeSelectionChanged);
 
-    onlineTabLayout->addWidget(onlineTree);
+    onlineSplitter->addWidget(onlineTree);
+    
+    // Detailed Properties (TIA Style)
+    QTabWidget *onlinePropTab = new QTabWidget(onlineTab);
+    QWidget *propContent = new QWidget();
+    QVBoxLayout *propVBox = new QVBoxLayout(propContent);
+    
+    QGroupBox *infoGroup = new QGroupBox("属性", propContent);
+    QFormLayout *form = new QFormLayout(infoGroup);
+    form->setLabelAlignment(Qt::AlignLeft);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    
+    onlinePropName = new QLabel("-");
+    onlinePropDeviceId = new QLabel("-");
+    onlinePropVendorId = new QLabel("-");
+    onlinePropType = new QLabel("-");
+    onlinePropIp = new QLabel("-");
+    onlinePropMask = new QLabel("-");
+    onlinePropGw = new QLabel("-");
+    onlinePropMac = new QLabel("-");
+    
+    form->addRow("站名称:", onlinePropName);
+    form->addRow("设备ID:", onlinePropDeviceId);
+    form->addRow("厂商ID:", onlinePropVendorId);
+    form->addRow("设备类型:", onlinePropType);
+    
+    QWidget *addrWidget = new QWidget();
+    QFormLayout *addrForm = new QFormLayout(addrWidget);
+    addrForm->setContentsMargins(0, 0, 0, 0);
+    addrForm->addRow("IP 地址:", onlinePropIp);
+    addrForm->addRow("子网掩码:", onlinePropMask);
+    addrForm->addRow("网关:", onlinePropGw);
+    form->addRow("地址:", addrWidget);
+    
+    form->addRow("MAC:", onlinePropMac);
+    form->addRow("职能:", new QLabel("设备"));
+    form->addRow("GSDML:", new QLabel("P-Net multi-module sample app (GSDML-V2.4)"));
+    
+    propVBox->addWidget(infoGroup);
+    propVBox->addStretch();
+    
+    onlinePropTab->addTab(propContent, "属性");
+    onlinePropTab->addTab(new QWidget(), "设备设置");
+    
+    onlineSplitter->addWidget(onlinePropTab);
+    onlineSplitter->setStretchFactor(0, 2);
+    onlineSplitter->setStretchFactor(1, 1);
+    
+    onlineTabLayout->addWidget(onlineSplitter);
     
     rightTabWidget->addTab(catalogTab, "设备列表");
     rightTabWidget->addTab(moduleTab, "子模块列表");
@@ -734,21 +785,22 @@ void MasterSimulationWidget::onScanClicked()
     statusLabel->setText(" 正在扫描网络中的 PROFINET 设备...");
     onlineTree->clear();
     
-    QList<PNConfigLib::DiscoveredDevice> devices = m_scanner->scan();
-    for (const auto &device : devices) {
+    m_onlineDevices = m_scanner->scan();
+    for (int i = 0; i < m_onlineDevices.size(); ++i) {
+        const auto &device = m_onlineDevices[i];
         QTreeWidgetItem *item = new QTreeWidgetItem(onlineTree);
         item->setText(0, device.macAddress);
         item->setText(1, device.deviceName);
         item->setText(2, device.deviceType);
         item->setText(3, device.ipAddress);
         item->setText(4, device.subnetMask);
-        item->setData(0, Qt::UserRole, device.gateway);
+        item->setData(0, Qt::UserRole, i); // Store index
     }
     
-    if (devices.isEmpty()) {
+    if (m_onlineDevices.isEmpty()) {
         statusLabel->setText(" 未发现 PROFINET 设备");
     } else {
-        statusLabel->setText(QString(" 发现 %1 个 PROFINET 设备").arg(devices.size()));
+        statusLabel->setText(QString(" 发现 %1 个 PROFINET 设备").arg(m_onlineDevices.size()));
         rightTabWidget->setCurrentIndex(2); // Switch to Online tab
     }
 }
@@ -810,5 +862,33 @@ void MasterSimulationWidget::onSetIp()
         } else {
             QMessageBox::warning(this, "设置错误", "无法发送 IP 修改请求。");
         }
+    }
+}
+
+void MasterSimulationWidget::onOnlineTreeSelectionChanged()
+{
+    QTreeWidgetItem *item = onlineTree->currentItem();
+    if (item) {
+        int index = item->data(0, Qt::UserRole).toInt();
+        if (index >= 0 && index < m_onlineDevices.size()) {
+            const auto &d = m_onlineDevices[index];
+            onlinePropName->setText(d.deviceName);
+            onlinePropDeviceId->setText(QString("16#%1").arg(d.deviceId, 4, 16, QChar('0')).toUpper());
+            onlinePropVendorId->setText(QString("16#%1").arg(d.vendorId, 4, 16, QChar('0')).toUpper());
+            onlinePropType->setText(d.deviceType);
+            onlinePropIp->setText(d.ipAddress);
+            onlinePropMask->setText(d.subnetMask);
+            onlinePropGw->setText(d.gateway);
+            onlinePropMac->setText(d.macAddress.toUpper().remove(':').remove('-'));
+        }
+    } else {
+        onlinePropName->setText("-");
+        onlinePropDeviceId->setText("-");
+        onlinePropVendorId->setText("-");
+        onlinePropType->setText("-");
+        onlinePropIp->setText("-");
+        onlinePropMask->setText("-");
+        onlinePropGw->setText("-");
+        onlinePropMac->setText("-");
     }
 }

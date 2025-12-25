@@ -291,6 +291,10 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
                 // FALLBACK: Some samples put Name of Station here
                 if (device.deviceName.isEmpty() || device.deviceName.contains('\0')) 
                     device.deviceName = QString::fromUtf8((const char*)payload, payloadLen).trimmed();
+            } else if (block->suboption == 0x03 && blockLen == 6) {
+                // Device ID block: 2 bytes Info + 2 bytes VendorID + 2 bytes DeviceID
+                device.vendorId = (payload[0] << 8) | payload[1];
+                device.deviceId = (payload[2] << 8) | payload[3];
             }
         } else if (block->option == 0x01) { // Device Properties
             if (block->suboption == 0x02 && payloadLen > 0) { // Name

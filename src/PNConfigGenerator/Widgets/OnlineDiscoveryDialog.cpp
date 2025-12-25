@@ -46,6 +46,9 @@ void OnlineDiscoveryDialog::setupUi()
     topLayout->addStretch();
     mainLayout->addLayout(topLayout);
 
+    QSplitter *splitter = new QSplitter(Qt::Vertical, this);
+    mainLayout->addWidget(splitter);
+
     // Table
     deviceTable = new QTableWidget(0, 5, this);
     deviceTable->setHorizontalHeaderLabels({"设备名称", "设备类型", "MAC 地址", "IP 地址", "子网掩码"});
@@ -53,7 +56,55 @@ void OnlineDiscoveryDialog::setupUi()
     deviceTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     deviceTable->setSelectionMode(QAbstractItemView::SingleSelection);
     connect(deviceTable, &QTableWidget::itemSelectionChanged, this, &OnlineDiscoveryDialog::onTableSelectionChanged);
-    mainLayout->addWidget(deviceTable);
+    splitter->addWidget(deviceTable);
+
+    // Properties View
+    detailsTab = new QTabWidget(this);
+    
+    QWidget *propWidget = new QWidget();
+    QVBoxLayout *propLayout = new QVBoxLayout(propWidget);
+    
+    QGroupBox *infoGroup = new QGroupBox("属性", propWidget);
+    QFormLayout *form = new QFormLayout(infoGroup);
+    form->setLabelAlignment(Qt::AlignLeft);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    
+    propName = new QLabel("-");
+    propDeviceId = new QLabel("-");
+    propVendorId = new QLabel("-");
+    propType = new QLabel("-");
+    propIp = new QLabel("-");
+    propMask = new QLabel("-");
+    propGw = new QLabel("-");
+    propMac = new QLabel("-");
+    
+    form->addRow("站名称:", propName);
+    form->addRow("设备ID:", propDeviceId);
+    form->addRow("厂商ID:", propVendorId);
+    form->addRow("设备类型:", propType);
+    
+    // Address sub-group in form
+    QWidget *addrWidget = new QWidget();
+    QFormLayout *addrForm = new QFormLayout(addrWidget);
+    addrForm->setContentsMargins(0, 0, 0, 0);
+    addrForm->addRow("IP 地址:", propIp);
+    addrForm->addRow("子网掩码:", propMask);
+    addrForm->addRow("网关:", propGw);
+    form->addRow("地址:", addrWidget);
+    
+    form->addRow("MAC:", propMac);
+    form->addRow("职能:", new QLabel("设备"));
+    form->addRow("GSDML:", new QLabel("P-Net multi-module sample app (GSDML-V2.4)"));
+    
+    propLayout->addWidget(infoGroup);
+    propLayout->addStretch();
+    
+    detailsTab->addTab(propWidget, "属性");
+    detailsTab->addTab(new QWidget(), "设备设置");
+    
+    splitter->addWidget(detailsTab);
+    splitter->setStretchFactor(0, 2);
+    splitter->setStretchFactor(1, 1);
 
     // Progress Bar
     progressBar = new QProgressBar(this);
@@ -140,21 +191,23 @@ void OnlineDiscoveryDialog::onStopSearch()
 void OnlineDiscoveryDialog::onUpdateResults()
 {
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    QList<PNConfigLib::DiscoveredDevice> devices = m_scanner->scan();
+    m_discoveredDevices = m_scanner->scan();
     QApplication::restoreOverrideCursor();
 
     deviceTable->setRowCount(0);
-    for (const auto &device : devices) {
+    for (int i = 0; i < m_discoveredDevices.size(); ++i) {
+        const auto &device = m_discoveredDevices[i];
         int row = deviceTable->rowCount();
         deviceTable->insertRow(row);
-        deviceTable->setItem(row, 0, new QTableWidgetItem(device.deviceName));
+        
+        QTableWidgetItem *nameItem = new QTableWidgetItem(device.deviceName);
+        nameItem->setData(Qt::UserRole, i); // Store index
+        deviceTable->setItem(row, 0, nameItem);
+        
         deviceTable->setItem(row, 1, new QTableWidgetItem(device.deviceType));
         deviceTable->setItem(row, 2, new QTableWidgetItem(device.macAddress));
         deviceTable->setItem(row, 3, new QTableWidgetItem(device.ipAddress));
         deviceTable->setItem(row, 4, new QTableWidgetItem(device.subnetMask));
-        
-        // Store gateway in UserRole of MAC column
-        deviceTable->item(row, 2)->setData(Qt::UserRole, device.gateway);
     }
 
     onStopSearch();
@@ -162,10 +215,36 @@ void OnlineDiscoveryDialog::onUpdateResults()
 
 void OnlineDiscoveryDialog::onTableSelectionChanged()
 {
-    bool hasSelection = !deviceTable->selectedItems().isEmpty();
+    int row = deviceTable->currentRow();
+    bool hasSelection = (row >= 0);
+    
     flashBtn->setEnabled(hasSelection);
     assignIpBtn->setEnabled(hasSelection);
     assignNameBtn->setEnabled(hasSelection);
+    
+    if (hasSelection) {
+        int index = deviceTable->item(row, 0)->data(Qt::UserRole).toInt();
+        if (index >= 0 && index < m_discoveredDevices.size()) {
+            const auto &d = m_discoveredDevices[index];
+            propName->setText(d.deviceName);
+            propDeviceId->setText(QString("16#%1").arg(d.deviceId, 4, 16, QChar('0')).toUpper());
+            propVendorId->setText(QString("16#%1").arg(d.vendorId, 4, 16, QChar('0')).toUpper());
+            propType->setText(d.deviceType);
+            propIp->setText(d.ipAddress);
+            propMask->setText(d.subnetMask);
+            propGw->setText(d.gateway);
+            propMac->setText(d.macAddress.toUpper().remove(':').remove('-'));
+        }
+    } else {
+        propName->setText("-");
+        propDeviceId->setText("-");
+        propVendorId->setText("-");
+        propType->setText("-");
+        propIp->setText("-");
+        propMask->setText("-");
+        propGw->setText("-");
+        propMac->setText("-");
+    }
 }
 
 void OnlineDiscoveryDialog::onFlashLed()

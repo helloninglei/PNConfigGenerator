@@ -47,6 +47,7 @@ private slots:
     void onOnlineContextMenu(const QPoint &pos);
     void onSetIp();
     void onOnlineDiscovery();
+    void onOnlineTreeSelectionChanged();
 
 private:
     void setupUi();
@@ -97,6 +98,17 @@ private:
     
     QList<PNConfigLib::GsdmlInfo> m_cachedDevices;
     QLabel *statusLabel;
+
+    // Online Properties view
+    QList<PNConfigLib::DiscoveredDevice> m_onlineDevices;
+    QLabel *onlinePropName;
+    QLabel *onlinePropDeviceId;
+    QLabel *onlinePropVendorId;
+    QLabel *onlinePropType;
+    QLabel *onlinePropIp;
+    QLabel *onlinePropMask;
+    QLabel *onlinePropGw;
+    QLabel *onlinePropMac;
 };
 
 #endif // MASTERSIMULATIONWIDGET_H

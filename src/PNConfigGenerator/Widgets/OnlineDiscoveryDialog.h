@@ -11,6 +11,10 @@
 #include <QHeaderView>
 #include <QTimer>
 #include <QProgressBar>
+#include <QTabWidget>
+#include <QSplitter>
+#include <QGroupBox>
+#include <QFormLayout>
 #include "../../PNConfigLib/Network/DcpScanner.h"
 
 namespace PNConfigLib {
@@ -50,7 +54,19 @@ private:
     QPushButton *assignIpBtn;
     QPushButton *assignNameBtn;
     
+    // Properties view
+    QTabWidget *detailsTab;
+    QLabel *propName;
+    QLabel *propDeviceId;
+    QLabel *propVendorId;
+    QLabel *propType;
+    QLabel *propIp;
+    QLabel *propMask;
+    QLabel *propGw;
+    QLabel *propMac;
+    
     QTimer *m_searchTimer;
+    QList<PNConfigLib::DiscoveredDevice> m_discoveredDevices;
 };
 
 #endif // ONLINEDISCOVERYDIALOG_H

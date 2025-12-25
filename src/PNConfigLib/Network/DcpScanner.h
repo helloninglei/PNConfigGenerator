@@ -21,6 +21,8 @@ struct DiscoveredDevice {
     QString ipAddress;
     QString subnetMask;
     QString gateway;
+    uint16_t vendorId = 0;
+    uint16_t deviceId = 0;
 };
 
 #pragma pack(push, 1)
