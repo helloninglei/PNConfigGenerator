@@ -278,31 +278,24 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
         const uint8_t *payload = val + 2;
         int payloadLen = blockLen - 2;
 
-        if (block->option == 0x02) { // IP (or non-standard string properties)
-            // Standard IP block must be exactly 14 bytes (2 Info + 4 IP + 4 Subnet + 4 GW)
-            if (block->suboption == 0x01 && blockLen == 14) {
+
+        if (block->option == 0x01) { // IP Parameters
+            // Suboption 1 (standard) or 2 (suite) both can contain IP if length >= 14
+            if ((block->suboption == 0x01 || block->suboption == 0x02) && blockLen >= 14) {
                 device.ipAddress = QString("%1.%2.%3.%4").arg(payload[0]).arg(payload[1]).arg(payload[2]).arg(payload[3]);
                 device.subnetMask = QString("%1.%2.%3.%4").arg(payload[4]).arg(payload[5]).arg(payload[6]).arg(payload[7]);
                 device.gateway = QString("%1.%2.%3.%4").arg(payload[8]).arg(payload[9]).arg(payload[10]).arg(payload[11]);
-            } else if (block->suboption == 0x01 && payloadLen > 5) {
-                // FALLBACK: Some samples put Type of Station here
-                if (device.deviceType.isEmpty()) device.deviceType = QString::fromUtf8((const char*)payload, payloadLen).trimmed();
-            } else if (block->suboption == 0x02 && payloadLen > 5) {
-                // FALLBACK: Some samples put Name of Station here
-                if (device.deviceName.isEmpty() || device.deviceName.contains('\0')) 
-                    device.deviceName = QString::fromUtf8((const char*)payload, payloadLen).trimmed();
-            } else if (block->suboption == 0x03 && blockLen == 6) {
-                // Device ID block: 2 bytes Info + 2 bytes VendorID + 2 bytes DeviceID
-                device.vendorId = (payload[0] << 8) | payload[1];
-                device.deviceId = (payload[2] << 8) | payload[3];
             }
-        } else if (block->option == 0x01) { // Device Properties
-            if (block->suboption == 0x02 && payloadLen > 0) { // Name
-                QString name = QString::fromUtf8((const char*)payload, payloadLen).trimmed();
-                if (!name.isEmpty() && name[0] != '\0') device.deviceName = name;
-            } else if (block->suboption == 0x01 && payloadLen > 0) { // Type
+        } else if (block->option == 0x02) { // Device Properties
+            if (block->suboption == 0x01 && payloadLen > 0) { // Type of Station
                 QString type = QString::fromUtf8((const char*)payload, payloadLen).trimmed();
                 if (!type.isEmpty() && type[0] != '\0') device.deviceType = type;
+            } else if (block->suboption == 0x02 && payloadLen > 0) { // Name of Station
+                QString name = QString::fromUtf8((const char*)payload, payloadLen).trimmed();
+                if (!name.isEmpty() && name[0] != '\0') device.deviceName = name;
+            } else if (block->suboption == 0x03 && blockLen == 6) { // Vendor/Device ID
+                device.vendorId = (payload[0] << 8) | payload[1];
+                device.deviceId = (payload[2] << 8) | payload[3];
             }
         }
 

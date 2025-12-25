@@ -207,8 +207,8 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     QSplitter *onlineSplitter = new QSplitter(Qt::Vertical, onlineTab);
     
     onlineTree = new QTreeWidget(onlineTab);
-    onlineTree->setHeaderLabels({"MAC 地址", "设备名称", "设备类型", "IP 地址", "子网掩码"});
-    onlineTree->setColumnWidth(0, 140);
+    onlineTree->setHeaderLabels({"设备名称", "设备类型", "MAC 地址", "IP 地址", "子网掩码"});
+    onlineTree->setColumnWidth(0, 150);
     onlineTree->setColumnWidth(1, 150);
     onlineTree->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(onlineTree, &QTreeWidget::customContextMenuRequested, this, &MasterSimulationWidget::onOnlineContextMenu);
@@ -789,9 +789,9 @@ void MasterSimulationWidget::onScanClicked()
     for (int i = 0; i < m_onlineDevices.size(); ++i) {
         const auto &device = m_onlineDevices[i];
         QTreeWidgetItem *item = new QTreeWidgetItem(onlineTree);
-        item->setText(0, device.macAddress);
-        item->setText(1, device.deviceName);
-        item->setText(2, device.deviceType);
+        item->setText(0, device.deviceName);
+        item->setText(1, device.deviceType);
+        item->setText(2, device.macAddress);
         item->setText(3, device.ipAddress);
         item->setText(4, device.subnetMask);
         item->setData(0, Qt::UserRole, i); // Store index

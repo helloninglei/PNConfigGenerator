@@ -18,9 +18,9 @@ struct DiscoveredDevice {
     QString deviceName;
     QString deviceType;
     QString macAddress;
-    QString ipAddress;
-    QString subnetMask;
-    QString gateway;
+    QString ipAddress = "0.0.0.0";
+    QString subnetMask = "0.0.0.0";
+    QString gateway = "0.0.0.0";
     uint16_t vendorId = 0;
     uint16_t deviceId = 0;
 };
