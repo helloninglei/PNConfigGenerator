@@ -221,8 +221,9 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     QWidget *propContent = new QWidget();
     QVBoxLayout *propVBox = new QVBoxLayout(propContent);
     
-    QGroupBox *infoGroup = new QGroupBox("属性", propContent);
-    QFormLayout *form = new QFormLayout(infoGroup);
+    onlinePropGroup = new QGroupBox("属性", propContent);
+    onlinePropGroup->setVisible(false);
+    QFormLayout *form = new QFormLayout(onlinePropGroup);
     form->setLabelAlignment(Qt::AlignLeft);
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     
@@ -248,11 +249,14 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     addrForm->addRow("网关:", onlinePropGw);
     form->addRow("地址:", addrWidget);
     
-    form->addRow("MAC:", onlinePropMac);
-    form->addRow("职能:", new QLabel("设备"));
-    form->addRow("GSDML:", new QLabel("P-Net multi-module sample app (GSDML-V2.4)"));
+    onlinePropRole = new QLabel("设备");
+    onlinePropGsdml = new QLabel("P-Net multi-module sample app (GSDML-V2.4)");
     
-    propVBox->addWidget(infoGroup);
+    form->addRow("MAC:", onlinePropMac);
+    form->addRow("职能:", onlinePropRole);
+    form->addRow("GSDML:", onlinePropGsdml);
+    
+    propVBox->addWidget(onlinePropGroup);
     propVBox->addStretch();
     
     onlinePropTab->addTab(propContent, "属性");
@@ -822,6 +826,12 @@ void MasterSimulationWidget::onConnectClicked()
         m_connectAction->setIcon(qApp->style()->standardIcon(QStyle::SP_DialogOkButton));
         m_scanAction->setEnabled(false);
         statusLabel->setText(" 已断开连接");
+
+        // Clear online list and details
+        onlineTree->clear();
+        m_onlineDevices.clear();
+        onlinePropGroup->setVisible(false);
+        onOnlineTreeSelectionChanged(); // Reset property views
     }
 }
 
@@ -877,15 +887,21 @@ void MasterSimulationWidget::onOnlineTreeSelectionChanged()
             onlinePropMask->setText(d.subnetMask);
             onlinePropGw->setText(d.gateway);
             onlinePropMac->setText(d.macAddress.toUpper().remove(':').remove('-'));
+            onlinePropRole->setText("设备");
+            onlinePropGsdml->setText("P-Net multi-module sample app (GSDML-V2.4)");
+            onlinePropGroup->setVisible(true);
         }
     } else {
-        onlinePropName->setText("-");
-        onlinePropDeviceId->setText("-");
-        onlinePropVendorId->setText("-");
-        onlinePropType->setText("-");
-        onlinePropIp->setText("-");
-        onlinePropMask->setText("-");
-        onlinePropGw->setText("-");
-        onlinePropMac->setText("-");
+        onlinePropGroup->setVisible(false);
+        onlinePropName->setText("");
+        onlinePropDeviceId->setText("");
+        onlinePropVendorId->setText("");
+        onlinePropType->setText("");
+        onlinePropIp->setText("");
+        onlinePropMask->setText("");
+        onlinePropGw->setText("");
+        onlinePropMac->setText("");
+        onlinePropRole->setText("");
+        onlinePropGsdml->setText("");
     }
 }

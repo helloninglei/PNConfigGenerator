@@ -101,6 +101,7 @@ private:
 
     // Online Properties view
     QList<PNConfigLib::DiscoveredDevice> m_onlineDevices;
+    QGroupBox *onlinePropGroup;
     QLabel *onlinePropName;
     QLabel *onlinePropDeviceId;
     QLabel *onlinePropVendorId;
@@ -109,6 +110,8 @@ private:
     QLabel *onlinePropMask;
     QLabel *onlinePropGw;
     QLabel *onlinePropMac;
+    QLabel *onlinePropRole;
+    QLabel *onlinePropGsdml;
 };
 
 #endif // MASTERSIMULATIONWIDGET_H
