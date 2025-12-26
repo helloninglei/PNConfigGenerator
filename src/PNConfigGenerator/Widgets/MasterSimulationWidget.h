@@ -60,6 +60,7 @@ private:
     void updateDeviceDetail(const PNConfigLib::GsdmlInfo &info);
     void displayDeviceSlots(const PNConfigLib::GsdmlInfo &info);
     void showBasicConfig(const PNConfigLib::GsdmlInfo &info);
+    void showModuleConfig(int slotIndex);
     void updateModuleList(const PNConfigLib::GsdmlInfo &info);
     QString formatIdent(uint32_t val);
 

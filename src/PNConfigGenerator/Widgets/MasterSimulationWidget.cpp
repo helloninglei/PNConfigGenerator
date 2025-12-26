@@ -542,12 +542,7 @@ void MasterSimulationWidget::onSlotClicked(int slotIndex)
         rightTabWidget->setCurrentIndex(0); // Show catalog or keep static?
         showBasicConfig(m_currentStationInfo);
     } else {
-        // Show module config area (empty for now)
-        while (QLayoutItem* item = configLayout->takeAt(0)) {
-            if (item->widget()) delete item->widget();
-            delete item;
-        }
-        configLayout->addWidget(new QLabel("模块配置 (Slot " + QString::number(slotIndex) + ")"));
+        showModuleConfig(slotIndex);
         
         // Show available modules in right tab
         rightTabWidget->setCurrentIndex(1); // "子模块列表"
@@ -592,6 +587,88 @@ void MasterSimulationWidget::onInsertModule()
             .arg(item->text(0))
             .arg(m_selectedSlotIndex, 4, 16, QChar('0')));
     }
+}
+
+void MasterSimulationWidget::showModuleConfig(int slotIndex)
+{
+    // Clear config layout
+    while (QLayoutItem* item = configLayout->takeAt(0)) {
+        if (item->widget()) delete item->widget();
+        delete item;
+    }
+
+    if (!m_assignedModules.contains(slotIndex)) {
+        configLayout->addWidget(new QLabel("Slot(" + QString::number(slotIndex) + ") - 未插入模块"));
+        return;
+    }
+
+    const auto& mod = m_assignedModules[slotIndex];
+
+    // 1. Header (TIA Style - Light Blue)
+    QLabel* header = new QLabel(QString("(0x%1) - %2")
+        .arg(slotIndex, 4, 16, QChar('0')).toUpper()
+        .arg(mod.name), this);
+    header->setStyleSheet("background-color: #87CEEB; padding: 8px; font-weight: bold; font-size: 14px;");
+    header->setMinimumHeight(40);
+    configLayout->addWidget(header);
+
+    // 2. Parameters Section (Demo based on screenshot)
+    auto addParamGroup = [&](const QString& title, const QString& labelText, const QString& defaultValue) {
+        QGroupBox* group = new QGroupBox(title, this);
+        QFormLayout* form = new QFormLayout(group);
+        form->setLabelAlignment(Qt::AlignLeft);
+        QLineEdit* edit = new QLineEdit(defaultValue, this);
+        edit->setFixedWidth(120);
+        form->addRow(labelText, edit);
+        configLayout->addWidget(group);
+    };
+
+    addParamGroup("Parameter 1", "Demo 1", "1");
+    addParamGroup("Parameter 2", "Demo 2", "2");
+
+    // 3. IO Tables (Conditional)
+    auto addIOTable = [&](const QString& title, bool isInput) {
+        // Check if there is any data for this direction
+        bool hasData = false;
+        for (const auto& sub : mod.submodules) {
+            if ((isInput && sub.inputDataLength > 0) || (!isInput && sub.outputDataLength > 0)) {
+                hasData = true;
+                break;
+            }
+        }
+
+        if (!hasData) return;
+
+        configLayout->addSpacing(10);
+        QLabel* titleLabel = new QLabel(title, this);
+        titleLabel->setStyleSheet("font-weight: bold;");
+        configLayout->addWidget(titleLabel);
+
+        QTableWidget* table = new QTableWidget(0, 2, this);
+        table->setHorizontalHeaderLabels({"名称", "类型"});
+        table->horizontalHeader()->setStretchLastSection(true);
+        table->verticalHeader()->setVisible(false);
+        table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        table->setSelectionBehavior(QAbstractItemView::SelectRows);
+        table->setMaximumHeight(100);
+        table->setStyleSheet("background: white; border: 1px solid #ccc;");
+        
+        for (const auto& sub : mod.submodules) {
+            if ((isInput && sub.inputDataLength > 0) || (!isInput && sub.outputDataLength > 0)) {
+                int row = table->rowCount();
+                table->insertRow(row);
+                table->setItem(row, 0, new QTableWidgetItem(sub.name));
+                table->setItem(row, 1, new QTableWidgetItem("Unsigned8")); // Static for demo
+            }
+        }
+
+        configLayout->addWidget(table);
+    };
+
+    addIOTable("输入", true);
+    addIOTable("输出", false);
+
+    configLayout->addStretch();
 }
 
 void MasterSimulationWidget::displayDeviceSlots(const PNConfigLib::GsdmlInfo &info)
