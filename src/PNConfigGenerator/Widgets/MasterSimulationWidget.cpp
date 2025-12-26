@@ -1145,8 +1145,13 @@ void MasterSimulationWidget::onSetStationName()
     if (index < 0 || index >= m_onlineDevices.size()) return;
 
     QString mac = m_onlineDevices[index].macAddress;
-    QString newName = editOnlineName->text();
+    QString newName = editOnlineName->text().trimmed();
     bool permanent = chkNamePermanent->isChecked();
+
+    if (newName.isEmpty()) {
+        QMessageBox::warning(this, "参数错误", "站名称不能为空。");
+        return;
+    }
 
     if (m_scanner->setDeviceName(mac, newName, permanent)) {
         statusLabel->setText(QString(" 已发送站名称修改请求: %1 -> %2 (%3)")

@@ -344,7 +344,7 @@ bool DcpScanner::setDeviceIp(const QString &mac, const QString &ip, const QStrin
 
     DcpHeader *dcp = (DcpHeader*)(packet + sizeof(EthernetHeader));
     dcp->frameId = qToBigEndian<uint16_t>(0xFEFD);
-    dcp->serviceId = 0x03;
+    dcp->serviceId = 0x04; // Set Request (was 0x03 which is Get)
     dcp->serviceType = 0x01;
     dcp->xid = qToBigEndian<uint32_t>(0x87654321);
     dcp->responseDelay = qToBigEndian<uint16_t>(0x00FF);
@@ -385,6 +385,8 @@ bool DcpScanner::setDeviceName(const QString &mac, const QString &name, bool per
     if (blockLen % 2 != 0) blockLen++; // Padding
 
     int totalLen = sizeof(EthernetHeader) + sizeof(DcpHeader) + 4 + blockLen;
+    if (totalLen < 60) totalLen = 60; // Padding for minimum Ethernet frame size
+
     QByteArray packet(totalLen, 0);
     uint8_t *pktData = (uint8_t*)packet.data();
 
@@ -395,7 +397,7 @@ bool DcpScanner::setDeviceName(const QString &mac, const QString &name, bool per
 
     DcpHeader *dcp = (DcpHeader*)(pktData + sizeof(EthernetHeader));
     dcp->frameId = qToBigEndian<uint16_t>(0xFEFD);
-    dcp->serviceId = 0x03;
+    dcp->serviceId = 0x04; // Set Request (was 0x03 which is Get)
     dcp->serviceType = 0x01;
     dcp->xid = qToBigEndian<uint32_t>(0x12348765);
     dcp->responseDelay = qToBigEndian<uint16_t>(0x00FF);
@@ -405,14 +407,13 @@ bool DcpScanner::setDeviceName(const QString &mac, const QString &name, bool per
     block->option = 0x02;    // Device Properties
     block->suboption = 0x02; // Name of Station
     block->length = qToBigEndian<uint16_t>(nameData.size() + 2); 
-                                                              // Actually for Name: Suboption 0x02, Length = 2 + nameLen.
-                                                              // The 2 bytes are reserved 0x0000.
     
     uint8_t *val = pktData + sizeof(EthernetHeader) + sizeof(DcpHeader) + 4;
-    val[0] = 0x00; val[1] = permanent ? 0x02 : 0x01; // Block Qualifier: bit 1 is permanent
+    val[0] = 0x00; val[1] = permanent ? 0x02 : 0x00; // Block Qualifier: bit 1 is permanent, 0x00 is none (temporary)
     memcpy(val + 2, nameData.constData(), nameData.size());
 
-    if (pcap_sendpacket(m_pcapHandle, pktData, totalLen) != 0) {
+    qDebug() << "Sending DCP Set Name request (Source MAC:" << macToString(m_sourceMac) << ", Name:" << name << ", Permanent:" << permanent << ")...";
+    if (pcap_sendpacket(m_pcapHandle, (const uint8_t*)pktData, totalLen) != 0) {
         qCritical() << "Error sending DCP Set Name request:" << pcap_geterr(m_pcapHandle);
         return false;
     }
@@ -436,7 +437,7 @@ bool DcpScanner::resetFactory(const QString &mac) {
 
     DcpHeader *dcp = (DcpHeader*)(packet + sizeof(EthernetHeader));
     dcp->frameId = qToBigEndian<uint16_t>(0xFEFD);
-    dcp->serviceId = 0x03; // Set
+    dcp->serviceId = 0x04; // Set Request (was 0x03 which is Get)
     dcp->serviceType = 0x01; // Request
     dcp->xid = qToBigEndian<uint32_t>(0x11223344);
     dcp->responseDelay = qToBigEndian<uint16_t>(0x00FF);
@@ -474,7 +475,7 @@ bool DcpScanner::flashLed(const QString &mac) {
 
     DcpHeader *dcp = (DcpHeader*)(packet + sizeof(EthernetHeader));
     dcp->frameId = qToBigEndian<uint16_t>(0xFEFD);
-    dcp->serviceId = 0x03;
+    dcp->serviceId = 0x04; // Set Request (was 0x03 which is Get)
     dcp->serviceType = 0x01;
     dcp->xid = qToBigEndian<uint32_t>(0x55AA55AA);
     dcp->responseDelay = qToBigEndian<uint16_t>(0x00FF);
