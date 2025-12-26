@@ -1102,11 +1102,12 @@ void MasterSimulationWidget::onOnlineTreeSelectionChanged()
             onlinePropMac->setText(d.macAddress.toUpper().remove(':').remove('-'));
             onlinePropRole->setText("设备");
             
-            // Setup Tab fields are empty by default per user request
-            editOnlineName->clear();
-            editOnlineIp->clear();
-            editOnlineMask->clear();
-            editOnlineGw->clear();
+            // Auto-populate Setup Tab fields
+            editOnlineName->setText(d.deviceName);
+            editOnlineIp->setText(d.ipAddress);
+            editOnlineMask->setText(d.subnetMask);
+            editOnlineGw->setText(d.gateway);
+
             onlinePropGsdml->setText("P-Net multi-module sample app (GSDML-V2.4)");
             onlinePropGroup->setVisible(true);
         }
