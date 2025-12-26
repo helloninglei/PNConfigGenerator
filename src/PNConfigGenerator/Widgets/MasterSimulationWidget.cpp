@@ -113,8 +113,9 @@ void MasterSimulationWidget::setupUi()
     createRightPanel(mainSplitter);
 
     mainSplitter->setStretchFactor(0, 1);
-    mainSplitter->setStretchFactor(1, 2);
-    mainSplitter->setStretchFactor(2, 1);
+    mainSplitter->setStretchFactor(1, 3);
+    mainSplitter->setStretchFactor(2, 2);
+    mainSplitter->setSizes({250, 600, 350});
     
     mainLayout->addWidget(mainSplitter, 1);
 
@@ -226,8 +227,8 @@ void MasterSimulationWidget::createCenterPanel(QSplitter *splitter)
     centerSplitter->addWidget(configArea);
     
     // Set initial splitter sizes
-    centerSplitter->setStretchFactor(0, 1);
-    centerSplitter->setStretchFactor(1, 1);
+    centerSplitter->setStretchFactor(0, 2);
+    centerSplitter->setStretchFactor(1, 3);
     
     splitter->addWidget(centerSplitter);
 }
