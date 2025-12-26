@@ -185,9 +185,6 @@ void MasterSimulationWidget::createLeftPanel(QSplitter *splitter)
     new QTreeWidgetItem(projectItem, QStringList() << "Logic");
     stationsItem = new QTreeWidgetItem(projectItem, QStringList() << "从站列表");
     
-    QTreeWidgetItem *devItem = new QTreeWidgetItem(stationsItem, QStringList() << "rt-labs-dev [Discovery]");
-    devItem->setSelected(true);
-    
     projectTree->expandAll();
     
     projectTree->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -210,11 +207,7 @@ void MasterSimulationWidget::createCenterPanel(QSplitter *splitter)
     slotLayout = new QVBoxLayout(slotContainer);
     slotLayout->setAlignment(Qt::AlignTop);
     
-    // Add initial empty slots (default to 4 for a clean start)
-    for (int i = 0; i <= 4; ++i) {
-        QString slotName = QString("Slot(0x%1)").arg(i, 4, 16, QChar('0'));
-        addSlot(slotLayout, i, slotName, "Empty Slot");
-    }
+    // Start with empty slots
     
     slotScrollArea->setWidget(slotContainer);
     centerSplitter->addWidget(slotScrollArea);
