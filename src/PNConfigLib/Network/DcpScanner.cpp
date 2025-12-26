@@ -260,6 +260,15 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
     device.macAddress = macToString(eth->src);
     qDebug() << "Parsing DCP Identify Response from MAC:" << device.macAddress;
 
+    // Check if we already have this device to merge info
+    int deviceIndex = -1;
+    for (int i = 0; i < devices.size(); ++i) {
+        if (devices[i].macAddress == device.macAddress) {
+            deviceIndex = i;
+            break;
+        }
+    }
+
     int offset = sizeof(EthernetHeader) + sizeof(DcpHeader);
     int dcpDataLen = qFromBigEndian<uint16_t>(dcp->dcpDataLength);
     int remaining = dcpDataLen;
@@ -277,7 +286,6 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
         // PROFINET DCP Blocks always start with 2 bytes of BlockInfo (Status), skip them
         const uint8_t *payload = val + 2;
         int payloadLen = blockLen - 2;
-
 
         if (block->option == 0x01) { // IP Parameters
             // Suboption 1 (standard) or 2 (suite) both can contain IP if length >= 14
@@ -305,14 +313,17 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
         remaining -= advance;
     }
 
-    bool found = false;
-    for (const auto &d : devices) {
-        if (d.macAddress == device.macAddress) {
-            found = true;
-            break;
-        }
-    }
-    if (!found) {
+    if (deviceIndex >= 0) {
+        // Merge into existing device
+        auto &d = devices[deviceIndex];
+        if (!device.deviceName.isEmpty()) d.deviceName = device.deviceName;
+        if (!device.deviceType.isEmpty()) d.deviceType = device.deviceType;
+        if (device.ipAddress != "0.0.0.0") d.ipAddress = device.ipAddress;
+        if (device.subnetMask != "0.0.0.0") d.subnetMask = device.subnetMask;
+        if (device.gateway != "0.0.0.0") d.gateway = device.gateway;
+        if (device.vendorId != 0) d.vendorId = device.vendorId;
+        if (device.deviceId != 0) d.deviceId = device.deviceId;
+    } else {
         devices.append(device);
     }
 }

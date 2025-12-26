@@ -1061,10 +1061,14 @@ void MasterSimulationWidget::onSetIp()
     QTreeWidgetItem *item = onlineTree->currentItem();
     if (!item) return;
 
-    QString mac = item->text(0);
-    QString currentIp = item->text(3);
-    QString currentMask = item->text(4);
-    QString currentGw = item->data(0, Qt::UserRole).toString();
+    int index = item->data(0, Qt::UserRole).toInt();
+    if (index < 0 || index >= m_onlineDevices.size()) return;
+
+    const auto &device = m_onlineDevices[index];
+    QString mac = device.macAddress;
+    QString currentIp = device.ipAddress;
+    QString currentMask = device.subnetMask;
+    QString currentGw = device.gateway;
 
     bool ok;
     QString newIp = QInputDialog::getText(this, "修改 IP 地址", 
@@ -1073,8 +1077,8 @@ void MasterSimulationWidget::onSetIp()
     if (ok && !newIp.isEmpty()) {
         if (m_scanner->setDeviceIp(mac, newIp, currentMask, currentGw)) {
             statusLabel->setText(QString(" 已发送 IP 修改请求: %1 -> %2").arg(mac, newIp));
-            // Re-scan after a short delay
-            QTimer::singleShot(2000, this, &MasterSimulationWidget::onScanClicked);
+            // Re-scan after a delay to allow the device to apply the change
+            QTimer::singleShot(3000, this, &MasterSimulationWidget::onScanClicked);
         } else {
             QMessageBox::warning(this, "设置错误", "无法发送 IP 修改请求。");
         }
@@ -1127,8 +1131,9 @@ void MasterSimulationWidget::onGetStationName()
     if (!item) return;
     int index = item->data(0, Qt::UserRole).toInt();
     if (index >= 0 && index < m_onlineDevices.size()) {
-        editOnlineName->setText(m_onlineDevices[index].deviceName);
-        statusLabel->setText(QString(" 已获取站名称: %1").arg(m_onlineDevices[index].deviceName));
+        const auto &device = m_onlineDevices[index];
+        editOnlineName->setText(device.deviceName);
+        statusLabel->setText(QString(" 已获取站名称: %1").arg(device.deviceName));
     }
 }
 
@@ -1146,7 +1151,7 @@ void MasterSimulationWidget::onSetStationName()
     if (m_scanner->setDeviceName(mac, newName, permanent)) {
         statusLabel->setText(QString(" 已发送站名称修改请求: %1 -> %2 (%3)")
             .arg(mac, newName, permanent ? "永久" : "临时"));
-        QTimer::singleShot(2000, this, &MasterSimulationWidget::onScanClicked);
+        QTimer::singleShot(3000, this, &MasterSimulationWidget::onScanClicked);
     } else {
         QMessageBox::warning(this, "设置错误", "无法发送站名称修改请求。");
     }
@@ -1182,7 +1187,7 @@ void MasterSimulationWidget::onSetIpConfig()
     if (m_scanner->setDeviceIp(mac, ip, mask, gw, permanent)) {
         statusLabel->setText(QString(" 已发送 IP 配置修改请求: %1 -> %2 (%3)")
             .arg(mac, ip, permanent ? "永久" : "临时"));
-        QTimer::singleShot(2000, this, &MasterSimulationWidget::onScanClicked);
+        QTimer::singleShot(3000, this, &MasterSimulationWidget::onScanClicked);
     } else {
         QMessageBox::warning(this, "设置错误", "无法发送 IP 配置修改请求。");
     }
