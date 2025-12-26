@@ -61,8 +61,9 @@ public:
     bool isConnected() const { return m_isConnected; }
 
     QList<DiscoveredDevice> scan();
-    bool setDeviceIp(const QString &mac, const QString &ip, const QString &mask, const QString &gw);
-    bool setDeviceName(const QString &mac, const QString &name);
+    bool setDeviceIp(const QString &mac, const QString &ip, const QString &mask, const QString &gw, bool permanent = false);
+    bool setDeviceName(const QString &mac, const QString &name, bool permanent = false);
+    bool resetFactory(const QString &mac);
     bool flashLed(const QString &mac);
 
 private:

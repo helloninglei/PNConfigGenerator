@@ -16,6 +16,8 @@
 #include <QToolBar>
 #include <QScrollArea>
 #include <QPoint>
+#include <QCheckBox>
+#include <QLineEdit>
 #include "../PNConfigLib/GsdmlParser/GsdmlParser.h"
 #include "../PNConfigLib/Network/DcpScanner.h"
 
@@ -48,6 +50,13 @@ private slots:
     void onOnlineContextMenu(const QPoint &pos);
     void onSetIp();
     void onOnlineTreeSelectionChanged();
+    
+    // Device Setup slots
+    void onGetStationName();
+    void onSetStationName();
+    void onGetIpConfig();
+    void onSetIpConfig();
+    void onResetToFactory();
 
 private:
     void setupUi();
@@ -113,6 +122,14 @@ private:
     QLabel *onlinePropMac;
     QLabel *onlinePropRole;
     QLabel *onlinePropGsdml;
+
+    // Device Setup UI members
+    QLineEdit *editOnlineName;
+    QCheckBox *chkNamePermanent;
+    QLineEdit *editOnlineIp;
+    QLineEdit *editOnlineMask;
+    QLineEdit *editOnlineGw;
+    QCheckBox *chkIpPermanent;
 };
 
 #include <QMetaType>

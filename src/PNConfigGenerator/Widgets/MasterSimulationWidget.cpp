@@ -335,9 +335,74 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     propVBox->addStretch();
     
     onlinePropTab->addTab(propContent, "属性");
-    onlinePropTab->addTab(new QWidget(), "设备设置");
+    
+    // 3.2 Device Setup Tab
+    QWidget *setupContent = new QWidget();
+    QVBoxLayout *setupVBox = new QVBoxLayout(setupContent);
+    setupVBox->setAlignment(Qt::AlignTop);
+    
+    // Group: Station Name
+    QGroupBox *nameGroup = new QGroupBox("站名称", setupContent);
+    QGridLayout *nameGrid = new QGridLayout(nameGroup);
+    nameGrid->addWidget(new QLabel("名称"), 0, 0);
+    editOnlineName = new QLineEdit("-");
+    nameGrid->addWidget(editOnlineName, 0, 1);
+    
+    QPushButton *btnGetName = new QPushButton("获取");
+    QPushButton *btnSetName = new QPushButton("设置");
+    nameGrid->addWidget(btnGetName, 0, 2);
+    nameGrid->addWidget(btnSetName, 0, 3);
+    
+    chkNamePermanent = new QCheckBox("永久保存");
+    chkNamePermanent->setChecked(true);
+    nameGrid->addWidget(chkNamePermanent, 1, 1);
+    setupVBox->addWidget(nameGroup);
+    
+    // Group: Network
+    QGroupBox *netGroupSetup = new QGroupBox("网络", setupContent);
+    QGridLayout *netGrid = new QGridLayout(netGroupSetup);
+    netGrid->addWidget(new QLabel("IP"), 0, 0);
+    editOnlineIp = new QLineEdit("0.0.0.0");
+    netGrid->addWidget(editOnlineIp, 0, 1);
+    
+    netGrid->addWidget(new QLabel("网关"), 1, 0);
+    editOnlineGw = new QLineEdit("0.0.0.0");
+    netGrid->addWidget(editOnlineGw, 1, 1);
+    
+    netGrid->addWidget(new QLabel("子网掩码"), 2, 0);
+    editOnlineMask = new QLineEdit("0.0.0.0");
+    netGrid->addWidget(editOnlineMask, 2, 1);
+    
+    QPushButton *btnGetIp = new QPushButton("获取");
+    QPushButton *btnSetIpSetup = new QPushButton("设置");
+    netGrid->addWidget(btnGetIp, 2, 2);
+    netGrid->addWidget(btnSetIpSetup, 2, 3);
+    
+    chkIpPermanent = new QCheckBox("永久保存");
+    chkIpPermanent->setChecked(true);
+    netGrid->addWidget(chkIpPermanent, 3, 1);
+    setupVBox->addWidget(netGroupSetup);
+    
+    // Group: Factory Reset
+    QGroupBox *resetGroup = new QGroupBox("重置为工厂设置", setupContent);
+    QVBoxLayout *resetLayout = new QVBoxLayout(resetGroup);
+    QPushButton *btnReset = new QPushButton("重置");
+    btnReset->setFixedWidth(120);
+    resetLayout->addWidget(btnReset, 0, Qt::AlignCenter);
+    setupVBox->addWidget(resetGroup);
+    
+    setupVBox->addStretch();
+    
+    onlinePropTab->addTab(setupContent, "设备设置");
     
     onlineSplitter->addWidget(onlinePropTab);
+    
+    // Connect Device Setup signals
+    connect(btnGetName, &QPushButton::clicked, this, &MasterSimulationWidget::onGetStationName);
+    connect(btnSetName, &QPushButton::clicked, this, &MasterSimulationWidget::onSetStationName);
+    connect(btnGetIp, &QPushButton::clicked, this, &MasterSimulationWidget::onGetIpConfig);
+    connect(btnSetIpSetup, &QPushButton::clicked, this, &MasterSimulationWidget::onSetIpConfig);
+    connect(btnReset, &QPushButton::clicked, this, &MasterSimulationWidget::onResetToFactory);
     onlineSplitter->setStretchFactor(0, 2);
     onlineSplitter->setStretchFactor(1, 1);
     
@@ -955,6 +1020,7 @@ void MasterSimulationWidget::onConnectClicked()
             btnConnect->setChecked(true);
             btnConnect->setIcon(createDisconnectIcon());
             btnScan->setEnabled(true);
+            nicComboBox->setEnabled(false);
             statusLabel->setText(QString(" 已连接到: %1").arg(nicComboBox->currentText()));
         } else {
             btnConnect->setChecked(false);
@@ -967,6 +1033,7 @@ void MasterSimulationWidget::onConnectClicked()
         btnConnect->setChecked(false);
         btnConnect->setIcon(createConnectIcon());
         btnScan->setEnabled(false);
+        nicComboBox->setEnabled(true);
         statusLabel->setText(" 已断开连接");
 
         // Clear online list and details
@@ -1030,6 +1097,12 @@ void MasterSimulationWidget::onOnlineTreeSelectionChanged()
             onlinePropGw->setText(d.gateway);
             onlinePropMac->setText(d.macAddress.toUpper().remove(':').remove('-'));
             onlinePropRole->setText("设备");
+            
+            // Setup Tab fields are empty by default per user request
+            editOnlineName->clear();
+            editOnlineIp->clear();
+            editOnlineMask->clear();
+            editOnlineGw->clear();
             onlinePropGsdml->setText("P-Net multi-module sample app (GSDML-V2.4)");
             onlinePropGroup->setVisible(true);
         }
@@ -1045,5 +1118,95 @@ void MasterSimulationWidget::onOnlineTreeSelectionChanged()
         onlinePropMac->setText("");
         onlinePropRole->setText("");
         onlinePropGsdml->setText("");
+    }
+}
+
+void MasterSimulationWidget::onGetStationName()
+{
+    QTreeWidgetItem *item = onlineTree->currentItem();
+    if (!item) return;
+    int index = item->data(0, Qt::UserRole).toInt();
+    if (index >= 0 && index < m_onlineDevices.size()) {
+        editOnlineName->setText(m_onlineDevices[index].deviceName);
+        statusLabel->setText(QString(" 已获取站名称: %1").arg(m_onlineDevices[index].deviceName));
+    }
+}
+
+void MasterSimulationWidget::onSetStationName()
+{
+    QTreeWidgetItem *item = onlineTree->currentItem();
+    if (!item) return;
+    int index = item->data(0, Qt::UserRole).toInt();
+    if (index < 0 || index >= m_onlineDevices.size()) return;
+
+    QString mac = m_onlineDevices[index].macAddress;
+    QString newName = editOnlineName->text();
+    bool permanent = chkNamePermanent->isChecked();
+
+    if (m_scanner->setDeviceName(mac, newName, permanent)) {
+        statusLabel->setText(QString(" 已发送站名称修改请求: %1 -> %2 (%3)")
+            .arg(mac, newName, permanent ? "永久" : "临时"));
+        QTimer::singleShot(2000, this, &MasterSimulationWidget::onScanClicked);
+    } else {
+        QMessageBox::warning(this, "设置错误", "无法发送站名称修改请求。");
+    }
+}
+
+void MasterSimulationWidget::onGetIpConfig()
+{
+    QTreeWidgetItem *item = onlineTree->currentItem();
+    if (!item) return;
+    int index = item->data(0, Qt::UserRole).toInt();
+    if (index >= 0 && index < m_onlineDevices.size()) {
+        const auto &d = m_onlineDevices[index];
+        editOnlineIp->setText(d.ipAddress);
+        editOnlineMask->setText(d.subnetMask);
+        editOnlineGw->setText(d.gateway);
+        statusLabel->setText(QString(" 已获取 IP 配置: %1").arg(d.ipAddress));
+    }
+}
+
+void MasterSimulationWidget::onSetIpConfig()
+{
+    QTreeWidgetItem *item = onlineTree->currentItem();
+    if (!item) return;
+    int index = item->data(0, Qt::UserRole).toInt();
+    if (index < 0 || index >= m_onlineDevices.size()) return;
+
+    QString mac = m_onlineDevices[index].macAddress;
+    QString ip = editOnlineIp->text();
+    QString mask = editOnlineMask->text();
+    QString gw = editOnlineGw->text();
+    bool permanent = chkIpPermanent->isChecked();
+
+    if (m_scanner->setDeviceIp(mac, ip, mask, gw, permanent)) {
+        statusLabel->setText(QString(" 已发送 IP 配置修改请求: %1 -> %2 (%3)")
+            .arg(mac, ip, permanent ? "永久" : "临时"));
+        QTimer::singleShot(2000, this, &MasterSimulationWidget::onScanClicked);
+    } else {
+        QMessageBox::warning(this, "设置错误", "无法发送 IP 配置修改请求。");
+    }
+}
+
+void MasterSimulationWidget::onResetToFactory()
+{
+    QTreeWidgetItem *item = onlineTree->currentItem();
+    if (!item) return;
+    int index = item->data(0, Qt::UserRole).toInt();
+    if (index < 0 || index >= m_onlineDevices.size()) return;
+
+    QString mac = m_onlineDevices[index].macAddress;
+    
+    if (QMessageBox::question(this, "工厂重置", 
+        QString("确定要对设备 %1 进行工厂重置吗？").arg(mac)) != QMessageBox::Yes) 
+    {
+        return;
+    }
+
+    if (m_scanner->resetFactory(mac)) {
+        statusLabel->setText(QString(" 已发送工厂重置请求: %1").arg(mac));
+        QTimer::singleShot(3000, this, &MasterSimulationWidget::onScanClicked);
+    } else {
+        QMessageBox::warning(this, "重置错误", "无法发送工厂重置请求。");
     }
 }

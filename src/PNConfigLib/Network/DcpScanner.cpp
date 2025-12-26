@@ -317,7 +317,7 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
     }
 }
 
-bool DcpScanner::setDeviceIp(const QString &mac, const QString &ip, const QString &mask, const QString &gw) {
+bool DcpScanner::setDeviceIp(const QString &mac, const QString &ip, const QString &mask, const QString &gw, bool permanent) {
     if (!m_isConnected || !m_pcapHandle) return false;
 
     QStringList macParts = mac.split(':');
@@ -340,8 +340,8 @@ bool DcpScanner::setDeviceIp(const QString &mac, const QString &ip, const QStrin
     dcp->dcpDataLength = qToBigEndian<uint16_t>(4 + 14); // Header + Payload
 
     DcpBlockHeader *block = (DcpBlockHeader*)(packet + sizeof(EthernetHeader) + sizeof(DcpHeader));
-    block->option = 0x02;
-    block->suboption = 0x01;
+    block->option = 0x01;    // IP
+    block->suboption = 0x02; // IP suite
     block->length = qToBigEndian<uint16_t>(14);
 
     QStringList ipParts = ip.split('.');
@@ -349,7 +349,7 @@ bool DcpScanner::setDeviceIp(const QString &mac, const QString &ip, const QStrin
     QStringList gwParts = gw.split('.');
     
     uint8_t *val = packet + sizeof(EthernetHeader) + sizeof(DcpHeader) + 4;
-    val[0] = 0x00; val[1] = 0x01; // Temporary
+    val[0] = 0x00; val[1] = permanent ? 0x02 : 0x01; // 0x01: Temporary, 0x02: Permanent
     if (ipParts.size() == 4) for (int i = 0; i < 4; ++i) val[2+i] = (uint8_t)ipParts[i].toInt();
     if (maskParts.size() == 4) for (int i = 0; i < 4; ++i) val[6+i] = (uint8_t)maskParts[i].toInt();
     if (gwParts.size() == 4) for (int i = 0; i < 4; ++i) val[10+i] = (uint8_t)gwParts[i].toInt();
@@ -363,7 +363,7 @@ bool DcpScanner::setDeviceIp(const QString &mac, const QString &ip, const QStrin
     return true;
 }
 
-bool DcpScanner::setDeviceName(const QString &mac, const QString &name) {
+bool DcpScanner::setDeviceName(const QString &mac, const QString &name, bool permanent) {
     if (!m_isConnected || !m_pcapHandle) return false;
 
     QStringList macParts = mac.split(':');
@@ -391,18 +391,56 @@ bool DcpScanner::setDeviceName(const QString &mac, const QString &name) {
     dcp->dcpDataLength = qToBigEndian<uint16_t>(4 + blockLen);
 
     DcpBlockHeader *block = (DcpBlockHeader*)(pktData + sizeof(EthernetHeader) + sizeof(DcpHeader));
-    block->option = 0x01; // IP/Device Properties
-    block->suboption = 0x02; // Name
-    block->length = qToBigEndian<uint16_t>(nameData.size() + 2); // 2 bytes for suboption prefix? No, suboption is in header. 
+    block->option = 0x02;    // Device Properties
+    block->suboption = 0x02; // Name of Station
+    block->length = qToBigEndian<uint16_t>(nameData.size() + 2); 
                                                               // Actually for Name: Suboption 0x02, Length = 2 + nameLen.
                                                               // The 2 bytes are reserved 0x0000.
     
     uint8_t *val = pktData + sizeof(EthernetHeader) + sizeof(DcpHeader) + 4;
-    val[0] = 0x00; val[1] = 0x00; // Reserved
+    val[0] = 0x00; val[1] = permanent ? 0x02 : 0x01; // Block Qualifier: bit 1 is permanent
     memcpy(val + 2, nameData.constData(), nameData.size());
 
     if (pcap_sendpacket(m_pcapHandle, pktData, totalLen) != 0) {
         qCritical() << "Error sending DCP Set Name request:" << pcap_geterr(m_pcapHandle);
+        return false;
+    }
+
+    return true;
+}
+
+bool DcpScanner::resetFactory(const QString &mac) {
+    if (!m_isConnected || !m_pcapHandle) return false;
+
+    QStringList macParts = mac.split(':');
+    if (macParts.size() != 6) return false;
+
+    uint8_t packet[64];
+    memset(packet, 0, sizeof(packet));
+
+    EthernetHeader *eth = (EthernetHeader*)packet;
+    for (int i = 0; i < 6; ++i) eth->dest[i] = (uint8_t)macParts[i].toInt(nullptr, 16);
+    memcpy(eth->src, m_sourceMac, 6);
+    eth->type = qToBigEndian<uint16_t>(0x8892);
+
+    DcpHeader *dcp = (DcpHeader*)(packet + sizeof(EthernetHeader));
+    dcp->frameId = qToBigEndian<uint16_t>(0xFEFD);
+    dcp->serviceId = 0x03; // Set
+    dcp->serviceType = 0x01; // Request
+    dcp->xid = qToBigEndian<uint32_t>(0x11223344);
+    dcp->responseDelay = qToBigEndian<uint16_t>(0x00FF);
+    dcp->dcpDataLength = qToBigEndian<uint16_t>(4 + 4); // Block Header + Qualifier
+
+    DcpBlockHeader *block = (DcpBlockHeader*)(packet + sizeof(EthernetHeader) + sizeof(DcpHeader));
+    block->option = 0x05; // Control Option
+    block->suboption = 0x06; // Factory Reset
+    block->length = qToBigEndian<uint16_t>(2); // Qualifier only
+
+    uint8_t *val = packet + sizeof(EthernetHeader) + sizeof(DcpHeader) + 4;
+    val[0] = 0x00; val[1] = 0x00; // Reserved/Qualifier for Factory Reset
+
+    if (pcap_sendpacket(m_pcapHandle, packet, 60) != 0) {
+        qCritical() << "Error sending DCP Factory Reset request:" << pcap_geterr(m_pcapHandle);
         return false;
     }
 
