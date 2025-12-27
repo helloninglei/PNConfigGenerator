@@ -20,10 +20,12 @@
 #include <QLineEdit>
 #include "../PNConfigLib/GsdmlParser/GsdmlParser.h"
 #include "../PNConfigLib/Network/DcpScanner.h"
+#include "../PNConfigLib/Network/ArExchangeManager.h"
 
 namespace PNConfigLib {
     class GsdmlInfo;
     class DcpScanner;
+    class ArExchangeManager;
     struct DiscoveredDevice;
 }
 
@@ -59,6 +61,9 @@ private slots:
     void onResetToFactory();
     void onFlashLed();
     void onFlashTimerTick();
+    void onStartCommunication();
+    void onArStateChanged(PNConfigLib::ArState state);
+    void onArLogMessage(const QString &msg);
 
 private:
     void setupUi();
@@ -79,13 +84,16 @@ private:
     QComboBox *nicComboBox;
     QPushButton *btnConnect;
     QPushButton *btnScan;
+    QPushButton *btnStart;
     bool m_isConnected = false;
+    bool m_isArRunning = false;
     
     QTreeWidget *projectTree;
     QTreeWidgetItem *stationsItem;
     
     QTreeWidget *onlineTree;
     PNConfigLib::DcpScanner *m_scanner;
+    PNConfigLib::ArExchangeManager *m_arManager;
     
     // Center panel
     QSplitter *centerSplitter;

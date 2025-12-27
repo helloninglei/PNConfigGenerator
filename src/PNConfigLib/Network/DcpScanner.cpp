@@ -318,9 +318,12 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
         auto &d = devices[deviceIndex];
         if (!device.deviceName.isEmpty()) d.deviceName = device.deviceName;
         if (!device.deviceType.isEmpty()) d.deviceType = device.deviceType;
-        if (device.ipAddress != "0.0.0.0") d.ipAddress = device.ipAddress;
-        if (device.subnetMask != "0.0.0.0") d.subnetMask = device.subnetMask;
-        if (device.gateway != "0.0.0.0") d.gateway = device.gateway;
+        
+        // Always update IP parameters if they were found in this block
+        if (!device.ipAddress.isEmpty()) d.ipAddress = device.ipAddress;
+        if (!device.subnetMask.isEmpty()) d.subnetMask = device.subnetMask;
+        if (!device.gateway.isEmpty()) d.gateway = device.gateway;
+        
         if (device.vendorId != 0) d.vendorId = device.vendorId;
         if (device.deviceId != 0) d.deviceId = device.deviceId;
     } else {
@@ -360,10 +363,17 @@ bool DcpScanner::setDeviceIp(const QString &mac, const QString &ip, const QStrin
     QStringList gwParts = gw.split('.');
     
     uint8_t *val = packet + sizeof(EthernetHeader) + sizeof(DcpHeader) + 4;
-    val[0] = 0x00; val[1] = permanent ? 0x02 : 0x01; // 0x01: Temporary, 0x02: Permanent
+    // Qualifier: bit 0: Temporary/Permanent, bit 1: Use IP (standard says bit 0 is temp/perm, bit 1 is set IP)
+    // For IP Suite: 0x0001 = Temporary, 0x0002 = Permanent (standard bit mappings can vary by device stack)
+    // Commonly: 0x0001 is Temp, 0x0002 is Permanent. Let's use 0x0001/0x0002 based on typical behavior.
+    val[0] = 0x00; val[1] = permanent ? 0x02 : 0x01; 
+    
     if (ipParts.size() == 4) for (int i = 0; i < 4; ++i) val[2+i] = (uint8_t)ipParts[i].toInt();
     if (maskParts.size() == 4) for (int i = 0; i < 4; ++i) val[6+i] = (uint8_t)maskParts[i].toInt();
     if (gwParts.size() == 4) for (int i = 0; i < 4; ++i) val[10+i] = (uint8_t)gwParts[i].toInt();
+
+    uint32_t xid = 0x87654321;
+    dcp->xid = qToBigEndian<uint32_t>(xid);
 
     qDebug() << "Sending DCP Set IP request (Source MAC:" << macToString(m_sourceMac) << ")...";
     if (pcap_sendpacket(m_pcapHandle, packet, 60) != 0) {
@@ -371,7 +381,8 @@ bool DcpScanner::setDeviceIp(const QString &mac, const QString &ip, const QStrin
         return false;
     }
 
-    return true;
+    int res = waitForSetResponse(xid);
+    return res == 0 || res == 5;
 }
 
 bool DcpScanner::setDeviceName(const QString &mac, const QString &name, bool permanent) {
@@ -412,13 +423,17 @@ bool DcpScanner::setDeviceName(const QString &mac, const QString &name, bool per
     val[0] = 0x00; val[1] = permanent ? 0x02 : 0x00; // Block Qualifier: bit 1 is permanent, 0x00 is none (temporary)
     memcpy(val + 2, nameData.constData(), nameData.size());
 
+    uint32_t xid = 0x12348765;
+    dcp->xid = qToBigEndian<uint32_t>(xid);
+
     qDebug() << "Sending DCP Set Name request (Source MAC:" << macToString(m_sourceMac) << ", Name:" << name << ", Permanent:" << permanent << ")...";
     if (pcap_sendpacket(m_pcapHandle, (const uint8_t*)pktData, totalLen) != 0) {
         qCritical() << "Error sending DCP Set Name request:" << pcap_geterr(m_pcapHandle);
         return false;
     }
 
-    return true;
+    int res = waitForSetResponse(xid);
+    return res == 0 || res == 5;
 }
 
 bool DcpScanner::resetFactory(const QString &mac) {
@@ -546,12 +561,20 @@ int DcpScanner::waitForSetResponse(uint32_t xid, int timeoutMs) {
                 {
                     qDebug() << "Matched DCP Response for XID:" << QString("0x%1").arg(xid, 8, 16, QChar('0'));
                     
-                    if (qFromBigEndian<uint16_t>(dcp->dcpDataLength) >= 5) {
+                    uint16_t dataLen = qFromBigEndian<uint16_t>(dcp->dcpDataLength);
+                    if (dataLen >= 7) {
                         uint8_t *payload = (uint8_t*)(data + sizeof(EthernetHeader) + sizeof(DcpHeader));
-                        int result = payload[4];
-                        qDebug() << "  Success! result code:" << result;
+                        // In a DCP-Set-Res ControlBlock:
+                        // payload[0..3] is BlockHeader (Option, Suboption, Length)
+                        // payload[4..5] is BlockQualifier
+                        // payload[6] is BlockResult (0=Success)
+                        int result = payload[6];
+                        qDebug() << "  DCP Block Result:" << result;
                         return result; 
                     }
+                    
+                    // If dcpDataLength is small but we matched SID and isToMe, 
+                    // and it's not a known error type, assume success.
                     return 0; 
                 }
             }

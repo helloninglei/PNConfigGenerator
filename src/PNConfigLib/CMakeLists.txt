@@ -53,6 +53,8 @@ add_library(PNConfigLib STATIC
     # Network
     Network/DcpScanner.h
     Network/DcpScanner.cpp
+    Network/ArExchangeManager.h
+    Network/ArExchangeManager.cpp
 
     # TinyXML2
     tinyxml2/tinyxml2.h

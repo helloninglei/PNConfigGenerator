@@ -1,5 +1,6 @@
 #include "MasterSimulationWidget.h"
 #include "Network/DcpScanner.h"
+#include "Network/ArExchangeManager.h"
 #include <QHeaderView>
 #include <QAction>
 #include <QApplication>
@@ -87,10 +88,45 @@ static QIcon createSearchIcon() {
     return QIcon(pix);
 }
 
+static QIcon createPlayIcon() {
+    QPixmap pix(24, 24);
+    pix.fill(Qt::transparent);
+    QPainter painter(&pix);
+    painter.setRenderHint(QPainter::Antialiasing);
+    
+    QPen pen(Qt::black, 1.5);
+    painter.setPen(pen);
+    painter.setBrush(QColor("#008000")); // Dark green
+    
+    QPolygonF triangle;
+    triangle << QPointF(8, 6) << QPointF(18, 12) << QPointF(8, 18);
+    painter.drawPolygon(triangle);
+    
+    return QIcon(pix);
+}
+
+static QIcon createStopIcon() {
+    QPixmap pix(24, 24);
+    pix.fill(Qt::transparent);
+    QPainter painter(&pix);
+    painter.setRenderHint(QPainter::Antialiasing);
+    
+    QPen pen(Qt::black, 1.5);
+    painter.setPen(pen);
+    painter.setBrush(QColor("#cc0000")); // Red
+    
+    painter.drawRect(7, 7, 10, 10);
+    
+    return QIcon(pix);
+}
+
 MasterSimulationWidget::MasterSimulationWidget(QWidget *parent)
     : QWidget(parent)
 {
     m_scanner = new PNConfigLib::DcpScanner(this);
+    m_arManager = new PNConfigLib::ArExchangeManager(this);
+    connect(m_arManager, &PNConfigLib::ArExchangeManager::stateChanged, this, &MasterSimulationWidget::onArStateChanged);
+    connect(m_arManager, &PNConfigLib::ArExchangeManager::messageLogged, this, &MasterSimulationWidget::onArLogMessage);
     setupUi();
     refreshCatalog();
 }
@@ -173,6 +209,14 @@ void MasterSimulationWidget::createToolbar()
     btnScan->setObjectName("btnScan");
     connect(btnScan, &QPushButton::clicked, this, &MasterSimulationWidget::onScanClicked);
     netLayout->addWidget(btnScan);
+
+    btnStart = new QPushButton(createPlayIcon(), "", netGroup);
+    btnStart->setEnabled(false);
+    btnStart->setFixedSize(28, 24);
+    btnStart->setToolTip("开始 cyclic 数据交换 (AR)");
+    btnStart->setObjectName("btnStart");
+    connect(btnStart, &QPushButton::clicked, this, &MasterSimulationWidget::onStartCommunication);
+    netLayout->addWidget(btnStart);
 
     toolbar->addWidget(netGroup);
 }
@@ -1031,6 +1075,14 @@ void MasterSimulationWidget::onScanClicked()
         statusLabel->setText(QString(" 发现 %1 个 PROFINET 设备").arg(m_onlineDevices.size()));
         rightTabWidget->setCurrentIndex(2); // Switch to Online tab
     }
+    
+    if (flashState) {
+        statusLed->setStyleSheet("background-color: #00FF00; border: 2px solid #ccc; border-radius: 10px;"); // Bright green
+    } else {
+        statusLed->setStyleSheet("background-color: #004D00; border: 2px solid #ccc; border-radius: 10px;"); // Dark green
+    }
+    flashState = !flashState;
+    flashRemaining--;
 }
 
 void MasterSimulationWidget::onConnectClicked()
@@ -1051,10 +1103,14 @@ void MasterSimulationWidget::onConnectClicked()
         }
     } else {
         m_scanner->disconnectFromInterface();
+        m_arManager->stop();
         m_isConnected = false;
+        m_isArRunning = false;
         btnConnect->setChecked(false);
         btnConnect->setIcon(createConnectIcon());
         btnScan->setEnabled(false);
+        btnStart->setEnabled(false);
+        btnStart->setIcon(createPlayIcon());
         nicComboBox->setEnabled(true);
         statusLabel->setText(" 已断开连接");
 
@@ -1136,12 +1192,17 @@ void MasterSimulationWidget::onOnlineTreeSelectionChanged()
             onlinePropGsdml->setText("P-Net multi-module sample app (GSDML-V2.4)");
             onlinePropGroup->setVisible(true);
 
+            if (m_isConnected) {
+                btnStart->setEnabled(true);
+            }
+
             // Reset Flash LED status
             statusLed->setStyleSheet("background-color: #f0f0f0; border: 2px solid #ccc; border-radius: 10px;");
             flashTimer->stop();
         }
     } else {
         onlinePropGroup->setVisible(false);
+        btnStart->setEnabled(false);
         onlinePropName->setText("");
         onlinePropDeviceId->setText("");
         onlinePropVendorId->setText("");
@@ -1184,11 +1245,11 @@ void MasterSimulationWidget::onSetStationName()
     }
 
     if (m_scanner->setDeviceName(mac, newName, permanent)) {
-        statusLabel->setText(QString(" 已发送站名称修改请求: %1 -> %2 (%3)")
-            .arg(mac, newName, permanent ? "永久" : "临时"));
-        QTimer::singleShot(3000, this, &MasterSimulationWidget::onScanClicked);
+        statusLabel->setText(QString(" 修改站名称成功: %1 (%2)")
+            .arg(newName, permanent ? "永久" : "临时"));
+        QTimer::singleShot(2000, this, &MasterSimulationWidget::onScanClicked);
     } else {
-        QMessageBox::warning(this, "设置错误", "无法发送站名称修改请求。");
+        QMessageBox::warning(this, "设置错误", "无法修改站名称。设备可能不支持或请求超时。");
     }
 }
 
@@ -1220,11 +1281,11 @@ void MasterSimulationWidget::onSetIpConfig()
     bool permanent = chkIpPermanent->isChecked();
 
     if (m_scanner->setDeviceIp(mac, ip, mask, gw, permanent)) {
-        statusLabel->setText(QString(" 已发送 IP 配置修改请求: %1 -> %2 (%3)")
-            .arg(mac, ip, permanent ? "永久" : "临时"));
-        QTimer::singleShot(3000, this, &MasterSimulationWidget::onScanClicked);
+        statusLabel->setText(QString(" 修改 IP 配置成功: %1 (%2)")
+            .arg(ip, permanent ? "永久" : "临时"));
+        QTimer::singleShot(2000, this, &MasterSimulationWidget::onScanClicked);
     } else {
-        QMessageBox::warning(this, "设置错误", "无法发送 IP 配置修改请求。");
+        QMessageBox::warning(this, "设置错误", "无法修改 IP 配置。设备可能不支持或请求超时。");
     }
 }
 
@@ -1295,4 +1356,56 @@ void MasterSimulationWidget::onFlashTimerTick()
     }
     flashState = !flashState;
     flashRemaining--;
+}
+
+void MasterSimulationWidget::onStartCommunication()
+{
+    if (m_isArRunning) {
+        m_arManager->stop();
+        m_isArRunning = false;
+        btnStart->setIcon(createPlayIcon());
+        btnStart->setToolTip("开始 cyclic 数据交换 (AR)");
+        return;
+    }
+
+    QTreeWidgetItem *item = onlineTree->currentItem();
+    if (!item) return;
+
+    QString mac = onlinePropMac->text();
+    QString ip = onlinePropIp->text();
+    QString nic = nicComboBox->currentData().toString();
+
+    if (m_arManager->start(nic, mac, ip)) {
+        m_isArRunning = true;
+        btnStart->setIcon(createStopIcon());
+        btnStart->setToolTip("停止数据交换");
+    } else {
+        QMessageBox::critical(this, "错误", "无法启动数据交换: " + m_arManager->lastError());
+    }
+}
+
+void MasterSimulationWidget::onArStateChanged(PNConfigLib::ArState state)
+{
+    switch (state) {
+        case PNConfigLib::ArState::Offline:
+            statusLabel->setText(" AR 已停止");
+            break;
+        case PNConfigLib::ArState::Connecting:
+            statusLabel->setText(" AR 正在建立连接 (Phase 1)...");
+            break;
+        case PNConfigLib::ArState::Parameterizing:
+            statusLabel->setText(" AR 正在参数化 (Phase 2)...");
+            break;
+        case PNConfigLib::ArState::Running:
+            statusLabel->setText(" AR 正在运行 (Cyclic Data Exchange)");
+            break;
+        case PNConfigLib::ArState::Error:
+            statusLabel->setText(" AR 错误: " + m_arManager->lastError());
+            break;
+    }
+}
+
+void MasterSimulationWidget::onArLogMessage(const QString &msg)
+{
+    qDebug() << "[AR Simulation]" << msg;
 }
