@@ -78,7 +78,14 @@ private:
     
     void updateDeviceDetail(const PNConfigLib::GsdmlInfo &info);
     void displayDeviceSlots(const PNConfigLib::GsdmlInfo &info);
-    void showBasicConfig(const PNConfigLib::GsdmlInfo &info);
+    void showBasicConfig(const PNConfigLib::GsdmlInfo &info, QTreeWidgetItem *item = nullptr);
+
+    enum TreeItemRoles {
+        RoleGsdmlIndex = Qt::UserRole,
+        RoleIpAddress = Qt::UserRole + 10,
+        RoleSubnetMask = Qt::UserRole + 11,
+        RoleGateway = Qt::UserRole + 12
+    };
     void showModuleConfig(int slotIndex);
     void updateModuleList(const PNConfigLib::GsdmlInfo &info);
     QString formatIdent(uint32_t val);

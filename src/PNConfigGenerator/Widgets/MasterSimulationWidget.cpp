@@ -657,7 +657,7 @@ void MasterSimulationWidget::onProjectTreeSelectionChanged()
         return;
     }
 
-    QVariant data = item->data(0, Qt::UserRole);
+    QVariant data = item->data(0, RoleGsdmlIndex);
     if (!data.isValid()) return;
 
     int index = data.toInt();
@@ -678,7 +678,7 @@ void MasterSimulationWidget::onProjectTreeSelectionChanged()
     m_assignedModules.clear();
     m_selectedSlotIndex = 0; // Default Select Slot 0
     displayDeviceSlots(m_currentStationInfo);
-    showBasicConfig(m_currentStationInfo);
+    showBasicConfig(m_currentStationInfo, item); // Pass item
 
     // Enable Start button if connected
     if (m_isConnected && !m_isArRunning) {
@@ -867,36 +867,52 @@ void MasterSimulationWidget::displayDeviceSlots(const PNConfigLib::GsdmlInfo &in
     slotLayout->addStretch();
 }
 
-void MasterSimulationWidget::showBasicConfig(const PNConfigLib::GsdmlInfo &info)
+void MasterSimulationWidget::showBasicConfig(const PNConfigLib::GsdmlInfo &info, QTreeWidgetItem *item)
 {
     // Clear config layout
-    while (QLayoutItem* item = configLayout->takeAt(0)) {
-        if (item->widget()) delete item->widget();
-        delete item;
+    while (QLayoutItem* layoutItem = configLayout->takeAt(0)) {
+        if (layoutItem->widget()) delete layoutItem->widget();
+        delete layoutItem;
     }
 
     // 1. Station Name Group
     QGroupBox *nameGroup = new QGroupBox("站名称", this);
     QFormLayout *nameForm = new QFormLayout(nameGroup);
     
-    // Default station name from GSDML, sanitized for PROFINET (lowercase, DNS labels)
-    QString rawName = info.deviceName.toLower();
-    QString sanitized;
-    for (const QChar &c : rawName) {
-        if (c.isLetterOrNumber()) {
-            sanitized += c;
-        } else if (c.isSpace() || c == '_' || c == '-' || c == '.') {
-            if (!sanitized.isEmpty() && sanitized.back() != '-') {
-                sanitized += '-';
+    // Default station name from GSDML, or use item text if available
+    QString initialName;
+    if (item) {
+        initialName = item->text(0);
+    } else {
+        QString rawName = info.deviceName.toLower();
+        for (const QChar &c : rawName) {
+            if (c.isLetterOrNumber()) {
+                initialName += c;
+            } else if (c.isSpace() || c == '_' || c == '-' || c == '.') {
+                if (!initialName.isEmpty() && initialName.back() != '-') {
+                    initialName += '-';
+                }
             }
         }
+        if (initialName.endsWith("-")) initialName.chop(1);
+        if (initialName.isEmpty()) initialName = "pn-device";
     }
-    if (sanitized.endsWith("-")) sanitized.chop(1);
-    if (sanitized.isEmpty()) sanitized = "pn-device";
 
-    editProjectName = new QLineEdit(sanitized, this);
+    editProjectName = new QLineEdit(initialName, this);
     nameForm->addRow("名称", editProjectName);
     configLayout->addWidget(nameGroup);
+
+    // Initial default network settings
+    QString initialIp = "192.168.0.253";
+    QString initialMask = "255.255.255.0";
+    QString initialGw = "192.168.0.1";
+    
+    // If a tree item is selected, try to load settings from its custom roles
+    if (item) {
+        if (!item->data(0, RoleIpAddress).toString().isEmpty()) initialIp = item->data(0, RoleIpAddress).toString();
+        if (!item->data(0, RoleSubnetMask).toString().isEmpty()) initialMask = item->data(0, RoleSubnetMask).toString();
+        if (!item->data(0, RoleGateway).toString().isEmpty()) initialGw = item->data(0, RoleGateway).toString();
+    }
 
     // 2. IP Config Group
     QGroupBox *ipGroup = new QGroupBox("IP配置", this);
@@ -906,9 +922,9 @@ void MasterSimulationWidget::showBasicConfig(const PNConfigLib::GsdmlInfo &info)
     ipVbox->addWidget(startupCheck);
     
     QFormLayout *ipForm = new QFormLayout();
-    editProjectIp = new QLineEdit("192.168.0.253", this);
-    editProjectMask = new QLineEdit("255.255.255.0", this);
-    editProjectGw = new QLineEdit("192.168.0.1", this);
+    editProjectIp = new QLineEdit(initialIp, this);
+    editProjectMask = new QLineEdit(initialMask, this);
+    editProjectGw = new QLineEdit(initialGw, this);
     ipForm->addRow("IP", editProjectIp);
     ipForm->addRow("子网掩码", editProjectMask);
     ipForm->addRow("网关", editProjectGw);
