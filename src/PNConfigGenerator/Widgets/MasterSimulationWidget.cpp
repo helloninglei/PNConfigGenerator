@@ -1179,6 +1179,11 @@ void MasterSimulationWidget::onOnlineContextMenu(const QPoint &pos)
     if (!item) return;
 
     QMenu menu(this);
+    QAction *addAction = menu.addAction("添加到配置");
+    connect(addAction, &QAction::triggered, this, &MasterSimulationWidget::onAddOnlineToConfiguration);
+    
+    menu.addSeparator();
+    
     QAction *setIpAction = menu.addAction("修改 IP 地址");
     connect(setIpAction, &QAction::triggered, this, &MasterSimulationWidget::onSetIp);
     
@@ -1186,6 +1191,62 @@ void MasterSimulationWidget::onOnlineContextMenu(const QPoint &pos)
     connect(flashAction, &QAction::triggered, this, &MasterSimulationWidget::onFlashLed);
     
     menu.exec(onlineTree->mapToGlobal(pos));
+}
+
+void MasterSimulationWidget::onAddOnlineToConfiguration()
+{
+    QTreeWidgetItem *item = onlineTree->currentItem();
+    if (!item) return;
+
+    int onlineIndex = -1;
+    QVariant data = item->data(0, Qt::UserRole);
+    if (data.isValid()) onlineIndex = data.toInt();
+
+    if (onlineIndex < 0 || onlineIndex >= m_onlineDevices.size()) return;
+
+    const auto &onlineDevice = m_onlineDevices[onlineIndex];
+
+    // Find matching GSDML in m_cachedDevices
+    int gsdmlIndex = -1;
+    for (int i = 0; i < m_cachedDevices.size(); ++i) {
+        if (m_cachedDevices[i].vendorId == onlineDevice.vendorId &&
+            m_cachedDevices[i].deviceId == onlineDevice.deviceId) {
+            gsdmlIndex = i;
+            break;
+        }
+    }
+
+    if (gsdmlIndex == -1) {
+        QMessageBox::warning(this, "警告", 
+            QString("无法在设备库中找到匹配的 GSDML 文件 (VendorID: 0x%1, DeviceID: 0x%2)。\n请先从工程树导入相应的 GSDML。")
+            .arg(onlineDevice.vendorId, 4, 16, QChar('0')).arg(onlineDevice.deviceId, 4, 16, QChar('0')));
+        return;
+    }
+
+    // Reuse logic to add to tree
+    QString baseName = onlineDevice.deviceName;
+    if (baseName.isEmpty()) baseName = m_cachedDevices[gsdmlIndex].deviceName;
+    
+    int count = 1;
+    QString finalName = baseName;
+    bool exists = true;
+    while (exists) {
+        exists = false;
+        for (int i = 0; i < stationsItem->childCount(); ++i) {
+            if (stationsItem->child(i)->text(0) == finalName) {
+                exists = true;
+                finalName = QString("%1-%2").arg(baseName).arg(count++);
+                break;
+            }
+        }
+    }
+
+    QTreeWidgetItem *newStation = new QTreeWidgetItem(stationsItem, QStringList() << finalName);
+    newStation->setIcon(0, qApp->style()->standardIcon(QStyle::SP_ComputerIcon));
+    newStation->setData(0, Qt::UserRole, gsdmlIndex);
+    
+    stationsItem->setExpanded(true);
+    statusLabel->setText(QString(" 已将在线设备 %1 添加到配置").arg(finalName));
 }
 
 void MasterSimulationWidget::onSetIp()

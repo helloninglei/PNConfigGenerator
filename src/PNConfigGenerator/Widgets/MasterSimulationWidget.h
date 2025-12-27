@@ -52,6 +52,7 @@ private slots:
     void onModuleContextMenu(const QPoint &pos);
     void onInsertModule();
     void onOnlineContextMenu(const QPoint &pos);
+    void onAddOnlineToConfiguration();
     void onSetIp();
     void onOnlineTreeSelectionChanged();
     
