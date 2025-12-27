@@ -58,6 +58,7 @@ private slots:
     void onSetIpConfig();
     void onResetToFactory();
     void onFlashLed();
+    void onFlashTimerTick();
 
 private:
     void setupUi();
@@ -131,6 +132,10 @@ private:
     QLineEdit *editOnlineMask;
     QLineEdit *editOnlineGw;
     QCheckBox *chkIpPermanent;
+    QLabel *statusLed;
+    QTimer *flashTimer;
+    int flashRemaining;
+    bool flashState;
 };
 
 #include <QMetaType>

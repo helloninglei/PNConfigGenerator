@@ -496,7 +496,70 @@ bool DcpScanner::flashLed(const QString &mac) {
         return false;
     }
 
-    return true;
+    // Wait for response (Success = 0, but some stacks return 5 for control/signal)
+    int res = waitForSetResponse(0x55AA55AA);
+    return res == 0 || res == 5;
+}
+
+int DcpScanner::waitForSetResponse(uint32_t xid, int timeoutMs) {
+    if (!m_pcapHandle) return -1;
+
+    struct pcap_pkthdr *header;
+    const uint8_t *data;
+    QElapsedTimer timer;
+    timer.start();
+
+    // Default to 2 seconds if not specified
+    if (timeoutMs == 1000) timeoutMs = 2000;
+
+    qDebug() << "Waiting for DCP Response (XID:" << QString("0x%1").arg(xid, 8, 16, QChar('0')) << ") for" << timeoutMs << "ms...";
+
+    while (timer.elapsed() < timeoutMs) {
+        int res = pcap_next_ex(m_pcapHandle, &header, &data);
+        if (res == 1) {
+            if (header->caplen < sizeof(EthernetHeader) + sizeof(DcpHeader)) continue;
+
+            EthernetHeader *eth = (EthernetHeader*)data;
+            DcpHeader *dcp = (DcpHeader*)(data + sizeof(EthernetHeader));
+            uint16_t frameId = qFromBigEndian<uint16_t>(dcp->frameId);
+            uint32_t capturedXid = qFromBigEndian<uint32_t>(dcp->xid);
+            
+            // Log ANY DCP-like frame for debugging
+            if (frameId >= 0xFE00 && frameId <= 0xFEFF) {
+                qDebug() << "  [DCP Seen] FrameID:" << QString("0x%1").arg(frameId, 4, 16, QChar('0'))
+                         << "SID:" << dcp->serviceId << "Type:" << dcp->serviceType
+                         << "XID:" << QString("0x%1").arg(capturedXid, 8, 16, QChar('0'))
+                         << "Dest:" << macToString(eth->dest);
+            }
+
+            // Frame ID 0xFEFD is DCP-Get-Set, 0xFEFF is Identify Response
+            if (frameId == 0xFEFD || frameId == 0xFEFF) {
+                // Check if this is addressed to us (to avoid matching our own sent packet)
+                bool isToMe = (memcmp(eth->dest, m_sourceMac, 6) == 0);
+                
+                // Allow Service ID 0x03 or 0x04 in response. 
+                // Note: Some devices incorrectly use ServiceType 0x01 (Request) for responses.
+                if (isToMe && 
+                    (dcp->serviceId == 0x03 || dcp->serviceId == 0x04) && 
+                    (dcp->serviceType == 0x01 || dcp->serviceType == 0x02) && 
+                    capturedXid == xid) 
+                {
+                    qDebug() << "Matched DCP Response for XID:" << QString("0x%1").arg(xid, 8, 16, QChar('0'));
+                    
+                    if (qFromBigEndian<uint16_t>(dcp->dcpDataLength) >= 5) {
+                        uint8_t *payload = (uint8_t*)(data + sizeof(EthernetHeader) + sizeof(DcpHeader));
+                        int result = payload[4];
+                        qDebug() << "  Success! result code:" << result;
+                        return result; 
+                    }
+                    return 0; 
+                }
+            }
+        }
+        QCoreApplication::processEvents();
+    }
+    qDebug() << "DCP Response timeout for XID:" << QString("0x%1").arg(xid, 8, 16, QChar('0'));
+    return -2; // Timeout
 }
 
 QString DcpScanner::macToString(const uint8_t *mac) {

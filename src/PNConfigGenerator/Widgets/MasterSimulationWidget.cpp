@@ -393,11 +393,24 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     
     // Group: Identification
     QGroupBox *identGroup = new QGroupBox("设备识别", setupContent);
-    QVBoxLayout *identLayout = new QVBoxLayout(identGroup);
+    QHBoxLayout *identLayout = new QHBoxLayout(identGroup);
+    
     QPushButton *btnFlash = new QPushButton("闪烁 LED");
     btnFlash->setFixedWidth(120);
-    identLayout->addWidget(btnFlash, 0, Qt::AlignCenter);
+    identLayout->addWidget(btnFlash);
+    
+    statusLed = new QLabel();
+    statusLed->setFixedSize(20, 20);
+    statusLed->setStyleSheet("background-color: #f0f0f0; border: 2px solid #ccc; border-radius: 10px;");
+    identLayout->addWidget(statusLed);
+    identLayout->addStretch();
+    
     setupVBox->addWidget(identGroup);
+    
+    flashTimer = new QTimer(this);
+    connect(flashTimer, &QTimer::timeout, this, &MasterSimulationWidget::onFlashTimerTick);
+    flashRemaining = 0;
+    flashState = false;
     
     setupVBox->addStretch();
     
@@ -1122,6 +1135,10 @@ void MasterSimulationWidget::onOnlineTreeSelectionChanged()
 
             onlinePropGsdml->setText("P-Net multi-module sample app (GSDML-V2.4)");
             onlinePropGroup->setVisible(true);
+
+            // Reset Flash LED status
+            statusLed->setStyleSheet("background-color: #f0f0f0; border: 2px solid #ccc; border-radius: 10px;");
+            flashTimer->stop();
         }
     } else {
         onlinePropGroup->setVisible(false);
@@ -1242,9 +1259,40 @@ void MasterSimulationWidget::onFlashLed()
     if (index < 0 || index >= m_onlineDevices.size()) return;
 
     QString mac = m_onlineDevices[index].macAddress;
+    
+    // Set to yellow (waiting)
+    statusLed->setStyleSheet("background-color: yellow; border: 2px solid #ccc; border-radius: 10px;");
+    statusLabel->setText(QString(" 正在发送闪烁 LED 请求... (%1)").arg(mac));
+    QCoreApplication::processEvents(); // Update UI immediately
+
     if (m_scanner->flashLed(mac)) {
-        statusLabel->setText(QString(" 已发送闪烁 LED 请求: %1").arg(mac));
+        statusLabel->setText(QString(" 闪烁 LED 请求成功: %1").arg(mac));
+        // Start green flashing animation
+        flashRemaining = 10; // 10 toggles (5 seconds at 500ms)
+        flashState = true;
+        flashTimer->start(500);
+        onFlashTimerTick();
     } else {
-        QMessageBox::warning(this, "闪烁错误", "无法发送闪烁 LED 请求。");
+        statusLabel->setText(QString(" 闪烁 LED 请求失败: %1").arg(mac));
+        // Solid red
+        statusLed->setStyleSheet("background-color: red; border: 2px solid #ccc; border-radius: 10px;");
+        flashTimer->stop();
     }
+}
+
+void MasterSimulationWidget::onFlashTimerTick()
+{
+    if (flashRemaining <= 0) {
+        flashTimer->stop();
+        statusLed->setStyleSheet("background-color: #008000; border: 2px solid #ccc; border-radius: 10px;"); // Solid green at the end
+        return;
+    }
+    
+    if (flashState) {
+        statusLed->setStyleSheet("background-color: #00FF00; border: 2px solid #ccc; border-radius: 10px;"); // Bright green
+    } else {
+        statusLed->setStyleSheet("background-color: #004D00; border: 2px solid #ccc; border-radius: 10px;"); // Dark green
+    }
+    flashState = !flashState;
+    flashRemaining--;
 }

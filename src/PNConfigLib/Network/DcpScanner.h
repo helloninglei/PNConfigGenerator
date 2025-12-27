@@ -67,6 +67,9 @@ public:
     bool flashLed(const QString &mac);
 
 private:
+    int waitForSetResponse(uint32_t xid, int timeoutMs = 1000);
+
+private:
     void parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDevice> &devices);
     QString macToString(const uint8_t *mac);
 
