@@ -391,6 +391,14 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     resetLayout->addWidget(btnReset, 0, Qt::AlignCenter);
     setupVBox->addWidget(resetGroup);
     
+    // Group: Identification
+    QGroupBox *identGroup = new QGroupBox("设备识别", setupContent);
+    QVBoxLayout *identLayout = new QVBoxLayout(identGroup);
+    QPushButton *btnFlash = new QPushButton("闪烁 LED");
+    btnFlash->setFixedWidth(120);
+    identLayout->addWidget(btnFlash, 0, Qt::AlignCenter);
+    setupVBox->addWidget(identGroup);
+    
     setupVBox->addStretch();
     
     onlinePropTab->addTab(setupContent, "设备设置");
@@ -403,6 +411,7 @@ void MasterSimulationWidget::createRightPanel(QSplitter *splitter)
     connect(btnGetIp, &QPushButton::clicked, this, &MasterSimulationWidget::onGetIpConfig);
     connect(btnSetIpSetup, &QPushButton::clicked, this, &MasterSimulationWidget::onSetIpConfig);
     connect(btnReset, &QPushButton::clicked, this, &MasterSimulationWidget::onResetToFactory);
+    connect(btnFlash, &QPushButton::clicked, this, &MasterSimulationWidget::onFlashLed);
     onlineSplitter->setStretchFactor(0, 2);
     onlineSplitter->setStretchFactor(1, 1);
     
@@ -1053,6 +1062,9 @@ void MasterSimulationWidget::onOnlineContextMenu(const QPoint &pos)
     QAction *setIpAction = menu.addAction("修改 IP 地址");
     connect(setIpAction, &QAction::triggered, this, &MasterSimulationWidget::onSetIp);
     
+    QAction *flashAction = menu.addAction("闪烁 LED");
+    connect(flashAction, &QAction::triggered, this, &MasterSimulationWidget::onFlashLed);
+    
     menu.exec(onlineTree->mapToGlobal(pos));
 }
 
@@ -1219,5 +1231,20 @@ void MasterSimulationWidget::onResetToFactory()
         QTimer::singleShot(3000, this, &MasterSimulationWidget::onScanClicked);
     } else {
         QMessageBox::warning(this, "重置错误", "无法发送工厂重置请求。");
+    }
+}
+
+void MasterSimulationWidget::onFlashLed()
+{
+    QTreeWidgetItem *item = onlineTree->currentItem();
+    if (!item) return;
+    int index = item->data(0, Qt::UserRole).toInt();
+    if (index < 0 || index >= m_onlineDevices.size()) return;
+
+    QString mac = m_onlineDevices[index].macAddress;
+    if (m_scanner->flashLed(mac)) {
+        statusLabel->setText(QString(" 已发送闪烁 LED 请求: %1").arg(mac));
+    } else {
+        QMessageBox::warning(this, "闪烁错误", "无法发送闪烁 LED 请求。");
     }
 }

@@ -57,6 +57,7 @@ private slots:
     void onGetIpConfig();
     void onSetIpConfig();
     void onResetToFactory();
+    void onFlashLed();
 
 private:
     void setupUi();

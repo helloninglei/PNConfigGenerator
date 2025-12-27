@@ -482,12 +482,10 @@ bool DcpScanner::flashLed(const QString &mac) {
     dcp->dcpDataLength = qToBigEndian<uint16_t>(4 + 4); // Block header + payload
 
     DcpBlockHeader *block = (DcpBlockHeader*)(packet + sizeof(EthernetHeader) + sizeof(DcpHeader));
-    block->option = 0x03; // Control
+    block->option = 0x05;    // Control (Corrected from 0x03)
     block->suboption = 0x03; // Signal
-    block->length = qToBigEndian<uint16_t>(4); // Value is 0x0100 + 2 bytes reserved? 
-                                              // Spec says Signal value is 2 bytes. 0x0100 = Signal Once.
-                                              // DCP Signal Block: Option 3, Suboption 3, Length 4? 
-                                              // Actually: 2 bytes reserved + 2 bytes value = 4.
+    block->length = qToBigEndian<uint16_t>(4); 
+                                              // Payload: 2 bytes Reserved (0x0000) + 2 bytes Value
 
     uint8_t *val = packet + sizeof(EthernetHeader) + sizeof(DcpHeader) + 4;
     val[0] = 0x00; val[1] = 0x00; // Reserved
