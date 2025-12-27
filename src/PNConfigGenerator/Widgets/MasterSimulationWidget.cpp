@@ -127,8 +127,23 @@ MasterSimulationWidget::MasterSimulationWidget(QWidget *parent)
     m_arManager = new PNConfigLib::ArExchangeManager(this);
     connect(m_arManager, &PNConfigLib::ArExchangeManager::stateChanged, this, &MasterSimulationWidget::onArStateChanged);
     connect(m_arManager, &PNConfigLib::ArExchangeManager::messageLogged, this, &MasterSimulationWidget::onArLogMessage);
+    
+    // Initialize project widgets
+    editProjectName = nullptr;
+    editProjectIp = nullptr;
+    editProjectMask = nullptr;
+    editProjectGw = nullptr;
+    comboProjectIoCycle = nullptr;
+    editProjectWatchdog = nullptr;
+
     setupUi();
     refreshCatalog();
+}
+
+MasterSimulationWidget::~MasterSimulationWidget()
+{
+    if (m_arManager) m_arManager->stop();
+    if (flashTimer) flashTimer->stop();
 }
 
 void MasterSimulationWidget::setupUi()
@@ -235,6 +250,7 @@ void MasterSimulationWidget::createLeftPanel(QSplitter *splitter)
     projectTree->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(projectTree, &QTreeWidget::customContextMenuRequested, this, &MasterSimulationWidget::onProjectTreeContextMenu);
     connect(projectTree, &QTreeWidget::itemDoubleClicked, this, &MasterSimulationWidget::onProjectTreeDoubleClicked);
+    connect(projectTree, &QTreeWidget::itemSelectionChanged, this, &MasterSimulationWidget::onProjectTreeSelectionChanged);
 
     splitter->addWidget(projectTree);
 }
@@ -633,10 +649,13 @@ void MasterSimulationWidget::onRemoveFromConfiguration()
     statusLabel->setText(QString(" 已删除设备: %1").arg(deviceName));
 }
 
-void MasterSimulationWidget::onProjectTreeDoubleClicked(QTreeWidgetItem *item, int column)
+void MasterSimulationWidget::onProjectTreeSelectionChanged()
 {
-    Q_UNUSED(column);
-    if (!item || !stationsItem || item->parent() != stationsItem) return;
+    QTreeWidgetItem *item = projectTree->currentItem();
+    if (!item || !stationsItem || item->parent() != stationsItem) {
+        if (!m_isArRunning) btnStart->setEnabled(false);
+        return;
+    }
 
     QVariant data = item->data(0, Qt::UserRole);
     if (!data.isValid()) return;
@@ -648,7 +667,7 @@ void MasterSimulationWidget::onProjectTreeDoubleClicked(QTreeWidgetItem *item, i
         // Mock slots for samples
         m_currentStationInfo = PNConfigLib::GsdmlInfo();
         m_currentStationInfo.deviceName = "P-Net multi-module sample app";
-        m_currentStationInfo.physicalSlots = 4; // Mock max slot
+        m_currentStationInfo.physicalSlots = 4;
         
         PNConfigLib::ModuleInfo m1;
         m1.name = "DO 8xLogicLevel";
@@ -660,6 +679,19 @@ void MasterSimulationWidget::onProjectTreeDoubleClicked(QTreeWidgetItem *item, i
     m_selectedSlotIndex = 0; // Default Select Slot 0
     displayDeviceSlots(m_currentStationInfo);
     showBasicConfig(m_currentStationInfo);
+
+    // Enable Start button if connected
+    if (m_isConnected && !m_isArRunning) {
+        btnStart->setEnabled(true);
+    }
+}
+
+void MasterSimulationWidget::onProjectTreeDoubleClicked(QTreeWidgetItem *item, int column)
+{
+    Q_UNUSED(item);
+    Q_UNUSED(column);
+    // Double click now just ensures selection which triggers onProjectTreeSelectionChanged
+    onProjectTreeSelectionChanged();
 }
 
 void MasterSimulationWidget::onSlotClicked(int slotIndex)
@@ -846,9 +878,24 @@ void MasterSimulationWidget::showBasicConfig(const PNConfigLib::GsdmlInfo &info)
     // 1. Station Name Group
     QGroupBox *nameGroup = new QGroupBox("站名称", this);
     QFormLayout *nameForm = new QFormLayout(nameGroup);
-    QLineEdit *nameEdit = new QLineEdit(statusLabel->text().trimmed().split(" ").last(), this); // Use a name from status if possible
-    if (nameEdit->text().isEmpty()) nameEdit->setText("rt-labs-dev");
-    nameForm->addRow("名称", nameEdit);
+    
+    // Default station name from GSDML, sanitized for PROFINET (lowercase, DNS labels)
+    QString rawName = info.deviceName.toLower();
+    QString sanitized;
+    for (const QChar &c : rawName) {
+        if (c.isLetterOrNumber()) {
+            sanitized += c;
+        } else if (c.isSpace() || c == '_' || c == '-' || c == '.') {
+            if (!sanitized.isEmpty() && sanitized.back() != '-') {
+                sanitized += '-';
+            }
+        }
+    }
+    if (sanitized.endsWith("-")) sanitized.chop(1);
+    if (sanitized.isEmpty()) sanitized = "pn-device";
+
+    editProjectName = new QLineEdit(sanitized, this);
+    nameForm->addRow("名称", editProjectName);
     configLayout->addWidget(nameGroup);
 
     // 2. IP Config Group
@@ -859,24 +906,28 @@ void MasterSimulationWidget::showBasicConfig(const PNConfigLib::GsdmlInfo &info)
     ipVbox->addWidget(startupCheck);
     
     QFormLayout *ipForm = new QFormLayout();
-    ipForm->addRow("IP", new QLineEdit("192.168.0.253", this));
-    ipForm->addRow("子网掩码", new QLineEdit("255.255.255.0", this));
-    ipForm->addRow("网关", new QLineEdit("192.168.0.1", this));
+    editProjectIp = new QLineEdit("192.168.0.253", this);
+    editProjectMask = new QLineEdit("255.255.255.0", this);
+    editProjectGw = new QLineEdit("192.168.0.1", this);
+    ipForm->addRow("IP", editProjectIp);
+    ipForm->addRow("子网掩码", editProjectMask);
+    ipForm->addRow("网关", editProjectGw);
     ipVbox->addLayout(ipForm);
     configLayout->addWidget(ipGroup);
 
     // 3. IO Cycle Time
     QGroupBox *ioGroup = new QGroupBox("IO周期时间(ms)", this);
     QVBoxLayout *ioVbox = new QVBoxLayout(ioGroup);
-    QComboBox *ioCombo = new QComboBox(this);
-    ioCombo->addItem("256");
-    ioVbox->addWidget(ioCombo);
+    comboProjectIoCycle = new QComboBox(this);
+    comboProjectIoCycle->addItem("256");
+    ioVbox->addWidget(comboProjectIoCycle);
     configLayout->addWidget(ioGroup);
 
     // 4. Watchdog
     QGroupBox *wdGroup = new QGroupBox("看门狗因子", this);
     QHBoxLayout *wdHbox = new QHBoxLayout(wdGroup);
-    wdHbox->addWidget(new QLineEdit("7", this));
+    editProjectWatchdog = new QLineEdit("7", this);
+    wdHbox->addWidget(editProjectWatchdog);
     wdHbox->addWidget(new QLabel("允许值: [3..7]", this));
     configLayout->addWidget(wdGroup);
     
@@ -1368,12 +1419,58 @@ void MasterSimulationWidget::onStartCommunication()
         return;
     }
 
-    QTreeWidgetItem *item = onlineTree->currentItem();
-    if (!item) return;
-
-    QString mac = onlinePropMac->text();
-    QString ip = onlinePropIp->text();
+    QString mac;
+    QString ip;
+    QString stationName;
     QString nic = nicComboBox->currentData().toString();
+
+    // Priority 1: Use project configuration if a station is selected
+    if (editProjectName && !editProjectName->text().isEmpty()) {
+        stationName = editProjectName->text().trimmed();
+        ip = editProjectIp->text().trimmed();
+        
+        qDebug() << "Attempting to start AR based on project config. Station Name:" << stationName << "Target IP:" << ip;
+        
+        // Resolve MAC from online list by matching Station Name
+        bool found = false;
+        for (const auto &device : m_onlineDevices) {
+            if (device.deviceName == stationName) {
+                mac = device.macAddress;
+                found = true;
+                qDebug() << "Matching online device found! MAC:" << mac;
+                break;
+            }
+        }
+        
+        if (!found) {
+            // Fallback: match by IP
+            for (const auto &device : m_onlineDevices) {
+                if (device.ipAddress == ip) {
+                    mac = device.macAddress;
+                    found = true;
+                    qDebug() << "Matching online device found by IP! MAC:" << mac;
+                    break;
+                }
+            }
+        }
+        
+        if (!found) {
+            QMessageBox::warning(this, "启动错误", 
+                QString("无法在网络上找到站名称为 '%1' 或 IP 为 '%2' 的在线设备。请先确保设备已连接并已扫描。")
+                .arg(stationName, ip));
+            return;
+        }
+    } else {
+        // Priority 2: Fallback to selected online device
+        QTreeWidgetItem *item = onlineTree->currentItem();
+        if (!item) {
+            QMessageBox::warning(this, "启动错误", "请先在 '在线' 选项卡中选择一个设备，或切换到 '从站列表' 进行配置。");
+            return;
+        }
+        mac = onlinePropMac->text();
+        ip = onlinePropIp->text();
+        qDebug() << "Starting AR based on selected online device. MAC:" << mac << "IP:" << ip;
+    }
 
     if (m_arManager->start(nic, mac, ip)) {
         m_isArRunning = true;

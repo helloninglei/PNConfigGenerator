@@ -34,6 +34,7 @@ class MasterSimulationWidget : public QWidget
     Q_OBJECT
 public:
     explicit MasterSimulationWidget(QWidget *parent = nullptr);
+    ~MasterSimulationWidget();
     void refreshCatalog();
 
 private slots:
@@ -44,6 +45,7 @@ private slots:
     void onCatalogContextMenu(const QPoint &pos);
     void onAddToConfiguration();
     void onProjectTreeContextMenu(const QPoint &pos);
+    void onProjectTreeSelectionChanged();
     void onRemoveFromConfiguration();
     void onProjectTreeDoubleClicked(QTreeWidgetItem *item, int column);
     void onSlotClicked(int slotIndex);
@@ -118,6 +120,14 @@ private:
     
     QList<PNConfigLib::GsdmlInfo> m_cachedDevices;
     QLabel *statusLabel;
+
+    // Project Configuration widgets (basic)
+    QLineEdit *editProjectName;
+    QLineEdit *editProjectIp;
+    QLineEdit *editProjectMask;
+    QLineEdit *editProjectGw;
+    QComboBox *comboProjectIoCycle;
+    QLineEdit *editProjectWatchdog;
 
     // Online Properties view
     QList<PNConfigLib::DiscoveredDevice> m_onlineDevices;
