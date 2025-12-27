@@ -25,7 +25,7 @@ public:
     explicit ArExchangeManager(QObject *parent = nullptr);
     ~ArExchangeManager();
 
-    bool start(const QString &interfaceName, const QString &targetMac, const QString &targetIp);
+    bool start(const QString &interfaceName, const QString &targetMac, const QString &targetIp, const QString &stationName);
     void stop();
 
     ArState state() const { return m_state; }
@@ -56,6 +56,7 @@ private:
     QString m_interfaceName;
     QString m_targetMac;
     QString m_targetIp;
+    QString m_stationName;
     
     uint8_t m_sourceMac[6];
     void* m_pcapHandle = nullptr;

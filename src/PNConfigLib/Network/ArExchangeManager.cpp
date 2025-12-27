@@ -1,9 +1,11 @@
 #line 1 "f:/workspaces/PNConfigGenerator/src/PNConfigLib/Network/ArExchangeManager.cpp"
 #include "ArExchangeManager.h"
+#include "DcpScanner.h"
 #include <QDebug>
 #include <QtEndian>
 #include <QNetworkInterface>
 #include <QStringList>
+#include <QThread>
 #include <pcap.h>
 
 namespace PNConfigLib {
@@ -20,12 +22,13 @@ ArExchangeManager::~ArExchangeManager() {
     stop();
 }
 
-bool ArExchangeManager::start(const QString &interfaceName, const QString &targetMac, const QString &targetIp) {
+bool ArExchangeManager::start(const QString &interfaceName, const QString &targetMac, const QString &targetIp, const QString &stationName) {
     if (m_state != ArState::Offline) return false;
 
     m_interfaceName = interfaceName;
     m_targetMac = targetMac;
     m_targetIp = targetIp;
+    m_stationName = stationName;
 
     char errbuf[PCAP_ERRBUF_SIZE];
     m_pcapHandle = pcap_open_live(interfaceName.toStdString().c_str(), 65536, 1, 10, errbuf);
@@ -65,11 +68,50 @@ bool ArExchangeManager::start(const QString &interfaceName, const QString &targe
         emit messageLogged("Warning: Failed to resolve source MAC. Simulation might fail.");
     }
 
+    // CRITICAL FIX: Configure device via DCP BEFORE starting AR
+    emit messageLogged("Step 1: Configuring device via DCP...");
+    
+    DcpScanner scanner;
+    if (!scanner.connectToInterface(interfaceName)) {
+        m_lastError = "Failed to connect DCP scanner to interface";
+        setState(ArState::Error);
+        return false;
+    }
+    
+    // Set station name first (REQUIRED before IP can be set)
+    emit messageLogged(QString("Setting station name to: %1").arg(stationName));
+    if (!scanner.setDeviceName(targetMac, stationName, true)) {
+        m_lastError = "Failed to set station name via DCP";
+        scanner.disconnectFromInterface();
+        setState(ArState::Error);
+        return false;
+    }
+    emit messageLogged("Station name set successfully");
+    
+    // Set IP address (will only be accepted if station name matches)
+    QStringList ipParts = targetIp.split('.');
+    QString mask = "255.255.255.0"; // Default subnet mask
+    QString gw = ipParts[0] + "." + ipParts[1] + "." + ipParts[2] + ".1"; // Default gateway
+    
+    emit messageLogged(QString("Setting IP to: %1, Mask: %2, Gateway: %3").arg(targetIp, mask, gw));
+    if (!scanner.setDeviceIp(targetMac, targetIp, mask, gw, true)) {
+        m_lastError = "Failed to set IP address via DCP";
+        scanner.disconnectFromInterface();
+        setState(ArState::Error);
+        return false;
+    }
+    emit messageLogged("IP address set successfully");
+    
+    scanner.disconnectFromInterface();
+    
+    // Small delay to let the device process the configuration
+    QThread::msleep(500);
+    
+    emit messageLogged("Step 2: Starting AR connection...");
     setState(ArState::Connecting);
     m_phaseStep = 0;
     m_phaseTimer->start(500); // Faster transitions for simulation
     
-    emit messageLogged("Starting IO Exchange simulation...");
     return true;
 }
 

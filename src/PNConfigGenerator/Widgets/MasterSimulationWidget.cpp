@@ -1546,10 +1546,11 @@ void MasterSimulationWidget::onStartCommunication()
         }
         mac = onlinePropMac->text();
         ip = onlinePropIp->text();
-        qDebug() << "Starting AR based on selected online device. MAC:" << mac << "IP:" << ip;
+        stationName = onlinePropName->text();
+        qDebug() << "Starting AR based on selected online device. MAC:" << mac << "IP:" << ip << "Name:" << stationName;
     }
 
-    if (m_arManager->start(nic, mac, ip)) {
+    if (m_arManager->start(nic, mac, ip, stationName)) {
         m_isArRunning = true;
         btnStart->setIcon(createStopIcon());
         btnStart->setToolTip("停止数据交换");
