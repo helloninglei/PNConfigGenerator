@@ -189,7 +189,7 @@ bool ArExchangeManager::sendRpcConnect() {
     uint8_t packet[512]; 
     memset(packet, 0, sizeof(packet));
     
-    // Ethernet & IP Headers (same as before)
+    // Ethernet & IP Headers
     QStringList macParts = m_targetMac.split(':');
     if (macParts.size() == 6) for (int i = 0; i < 6; ++i) packet[i] = (uint8_t)macParts[i].toInt(nullptr, 16);
     memcpy(packet + 6, m_sourceMac, 6);
@@ -213,23 +213,21 @@ bool ArExchangeManager::sendRpcConnect() {
     uint8_t *rpc = packet + 42;
     rpc[0] = 4;        // RPC Version
     rpc[1] = 0;        // PDU Type: Request
-    rpc[2] = 0x20;     // Flags1: Idempotent
+    rpc[2] = 0x23;     // Flags1: Idempotent (0x20) | Last Frag (0x02) | First Frag (0x01)
     rpc[3] = 0;        // Flags2
     rpc[4] = 0x10;     // Data Rep (Little Endian, IEEE Float, ASCII)
-    rpc[8] = 0;        // Serial High
+    rpc[8] = 0;        // Object UUID (Starts at offset 8, usually Nil/0s)
+    memset(rpc + 8, 0, 16);
     
-    // Interface UUID: DEA00001-6C97-11D1-8271-00A02442DF7D 
-    // PROFINET standard: first three fields are LITTLE ENDIAN in the wire packet.
-    // DEA00001 -> 01 00 A0 DE (Wait, DE A0 00 01)
-    // Actually, DCE RPC defines UUID as: 4-2-2-2-6
-    // DEA00001 (4 bytes) - 6C97 (2 bytes) - 11D1 (2 bytes) ...
-    // In p-net: 0x01, 0x00, 0xA0, 0xDE, 0x97, 0x6C, 0xD1, 0x11 ...
+    // Interface UUID: DEA00001-6C97-11D1-8271-00A02442DF7D (offset 24)
     const uint8_t ifUuid[] = { 0x01, 0x00, 0xA0, 0xDE, 0x97, 0x6C, 0xD1, 0x11, 0x82, 0x71, 0x00, 0xA0, 0x24, 0x42, 0xDF, 0x7D };
-    
-    // Interface UUID starts at offset 24 in RPC packet (42 + 24 = 66 in Ethernet)
     memcpy(rpc + 24, ifUuid, 16); 
-    // Activity UUID (often all 0s or random) starts at offset 8
-    memset(rpc + 8, 0xAA, 16); // Random activity ID
+    
+    // Activity UUID (offset 40)
+    memset(rpc + 40, 0xAA, 16); // Activity ID
+    
+    // Interface Version starts at offset 60
+    rpc[60] = 0x01; rpc[61] = 0x00; rpc[62] = 0x01; rpc[63] = 0x00; // Ver 1.1
     
     // Sequence Number starts at offset 64
     static uint32_t seq = 100;
@@ -238,57 +236,100 @@ bool ArExchangeManager::sendRpcConnect() {
     // Opnum starts at offset 68
     rpc[68] = 0; rpc[69] = 0; // Opnum 0 (Connect)
     
-    // Interface Version starts at offset 52
-    rpc[52] = 0x01; rpc[53] = 0x00; // Ver 1.0
+    // Hints
+    rpc[70] = 0xFF; rpc[71] = 0xFF; 
+    rpc[72] = 0xFF; rpc[73] = 0xFF;
 
-    // Body Length is at offset 74
-    // We'll send a 200-byte body containing AR, IOCR and AlarmCR blocks
-    uint16_t bodyLen = 200; 
-    rpc[74] = (bodyLen & 0xFF); rpc[75] = ((bodyLen >> 8) & 0xFF);
-
-    // Fragment Number is at offset 76
+    // FragNum at 76
     rpc[76] = 0; rpc[77] = 0;
 
-    // --- DCE RPC Body (starts at 42 + 80 = 122) ---
+    // --- DCE RPC Body (starts at 122) ---
     uint8_t *body = packet + 122;
     int offset = 0;
 
-    // Block 1: ARBlockRequest (Type 0x0101, Length 60)
-    body[offset++] = 0x01; body[offset++] = 0x01; // Type
-    body[offset++] = 0x00; body[offset++] = 0x3C; // Length
+    // Block 1: ARBlockRequest (Type 0x0101, Length 56)
+    int b1_start = offset;
+    body[offset++] = 0x01; body[offset++] = 0x01; // Type 0x0101
+    body[offset++] = 0x00; body[offset++] = 0x38; // Length 56
     body[offset++] = 0x01; body[offset++] = 0x00; // Version 1.0
     body[offset++] = 0x00; body[offset++] = 0x01; // ARType: IO-AR
     static const uint8_t arUuid[] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF };
     memcpy(body + offset, arUuid, 16); offset += 16;
     body[offset++] = 0x00; body[offset++] = 0x01; // Session Key
     memcpy(body + offset, m_sourceMac, 6); offset += 6; // CM-Initiator-MAC
-    offset = 64; // End of Block 1 padding
+    memset(body + offset, 0, 16); offset += 16; // Object UUID
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x02; body[offset++] = 0x01; // ARProperties (Pull allowed)
+    body[offset++] = 0x0B; body[offset++] = 0xB8; // Activity Timeout (3000ms)
+    body[offset++] = 0x88; body[offset++] = 0x94; // Initiator UDP Port
+    body[offset++] = 0x00; body[offset++] = 0x00; // Station Name Length
+    while (offset < b1_start + 60) body[offset++] = 0x00; 
 
-    // Block 2: IOCRBlockRequest (Input, Type 0x0102, Length 40)
-    body[offset++] = 0x01; body[offset++] = 0x02; // Type
-    body[offset++] = 0x00; body[offset++] = 0x28; // Length
-    body[offset++] = 0x01; body[offset++] = 0x00; // Version
+    // Block 2: IOCR (Input, Type 0x0102, Length 40)
+    int b2_start = offset;
+    body[offset++] = 0x01; body[offset++] = 0x02; // Type 0x0102
+    body[offset++] = 0x00; body[offset++] = 0x28; // Length 40
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version 1.0
     body[offset++] = 0x00; body[offset++] = 0x01; // IOCRType: Input
     body[offset++] = 0x00; body[offset++] = 0x01; // IOCR Reference
     body[offset++] = 0x88; body[offset++] = 0x92; // LT
-    offset = 64 + 44; // End of Block 2 padding
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // IOCRProperties
+    body[offset++] = 0x00; body[offset++] = 0x01; // Reduction Ratio
+    body[offset++] = 0x00; body[offset++] = 0x01; // Phase
+    body[offset++] = 0x00; body[offset++] = 0x01; // Sequence
+    body[offset++] = 0x80; body[offset++] = 0x01; // FrameID
+    body[offset++] = 0x00; body[offset++] = 0x40; // DB Length (64)
+    body[offset++] = 0x00; body[offset++] = 0x03; // WD Factor
+    body[offset++] = 0x00; body[offset++] = 0x03; // DataHold Factor
+    body[offset++] = 0x00; body[offset++] = 0x00; // IOCR Tag
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API 0
+    while (offset < b2_start + 44) body[offset++] = 0x00;
 
-    // Block 3: IOCRBlockRequest (Output, Type 0x0102, Length 40)
-    body[offset++] = 0x01; body[offset++] = 0x02; // Type
-    body[offset++] = 0x00; body[offset++] = 0x28; // Length
-    body[offset++] = 0x01; body[offset++] = 0x00; // Version
+    // Block 3: IOCR (Output, Type 0x0102, Length 40)
+    int b3_start = offset;
+    body[offset++] = 0x01; body[offset++] = 0x02; // Type 0x0102
+    body[offset++] = 0x00; body[offset++] = 0x28; // Length 40
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version 1.0
     body[offset++] = 0x00; body[offset++] = 0x02; // IOCRType: Output
     body[offset++] = 0x00; body[offset++] = 0x02; // IOCR Reference
     body[offset++] = 0x88; body[offset++] = 0x92; // LT
-    offset = 64 + 44 + 44; // End of Block 3 padding
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // IOCRProperties
+    body[offset++] = 0x00; body[offset++] = 0x01; // RR
+    body[offset++] = 0x00; body[offset++] = 0x01; // Phase
+    body[offset++] = 0x00; body[offset++] = 0x01; // Sequence
+    body[offset++] = 0x80; body[offset++] = 0x02; // FrameID
+    body[offset++] = 0x00; body[offset++] = 0x40; // DB Length
+    body[offset++] = 0x00; body[offset++] = 0x03; // WD Factor
+    body[offset++] = 0x00; body[offset++] = 0x03; // DataHold Factor
+    body[offset++] = 0x00; body[offset++] = 0x00; // Tag
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API
+    while (offset < b3_start + 44) body[offset++] = 0x00;
 
-    // Block 4: AlarmCRBlockRequest (Type 0x0103, Length 44)
-    body[offset++] = 0x01; body[offset++] = 0x03; // Type
-    body[offset++] = 0x00; body[offset++] = 0x2C; // Length
-    body[offset++] = 0x01; body[offset++] = 0x00; // Version
+    // Block 4: AlarmCR (Type 0x0103, Length 40)
+    int b4_start = offset;
+    body[offset++] = 0x01; body[offset++] = 0x03; // Type 0x0103
+    body[offset++] = 0x00; body[offset++] = 0x28; // Length 40
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version 1.0
     body[offset++] = 0x00; body[offset++] = 0x01; // AlarmCRType
-    body[offset++] = 0x00; body[offset++] = 0x01; // Ethernet Type
-    // Padding to 200 total body bytes
+    body[offset++] = 0x08; body[offset++] = 0x00; // EthType
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // Properties
+    body[offset++] = 0x00; body[offset++] = 0x01; // Timeout
+    body[offset++] = 0x00; body[offset++] = 0x01; // Retries
+    body[offset++] = 0x88; body[offset++] = 0x94; // Local Port
+    body[offset++] = 0x88; body[offset++] = 0x94; // Remote Port
+    while (offset < b4_start + 44) body[offset++] = 0x00;
+
+    // Block 5: ExpectedSubmodule (Type 0x0104, Length 20)
+    int b5_start = offset;
+    body[offset++] = 0x01; body[offset++] = 0x04; // Type 0x0104
+    body[offset++] = 0x00; body[offset++] = 0x14; // Length 20
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version 1.0
+    body[offset++] = 0x00; body[offset++] = 0x01; // #API
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API 0
+    body[offset++] = 0x00; body[offset++] = 0x01; // #Modules
+    body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // Module ID
+    body[offset++] = 0x00; body[offset++] = 0x00; // #Submodules
+    while (offset < b5_start + 24) body[offset++] = 0x00;
 
     // Finalize Lengths
     uint16_t bodyLenVal = (uint16_t)offset;
@@ -417,8 +458,19 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
                 if (type == 0x0800) { // IPv4
                     uint16_t destPort = (data[36] << 8 | data[37]);
                     if (data[23] == 0x11) { // UDP
-                        emit messageLogged(QString("  [RPC Packet Captured] DestPort: %1 Len: %2").arg(destPort).arg(header->caplen));
-                        if (destPort == 34964) return 0; // Success
+                        uint8_t pduType = data[43]; // Offset 42+1 (PDU Type)
+                        if (pduType == 2) { // Response
+                            if (header->caplen >= 126) {
+                                uint32_t retVal = data[122] | (data[123] << 8) | (data[124] << 16) | (data[125] << 24);
+                                emit messageLogged(QString("  [RPC Response] Return Value: 0x%1").arg(retVal, 8, 16, QChar('0')));
+                                if (retVal == 0) return 0; // Success
+                                return -3; // Slave rejected (e.g. 0xDB814001)
+                            }
+                        } else if (pduType == 3) {
+                            emit messageLogged("  [RPC Fault] DCE RPC Fault received.");
+                            return -4;
+                        }
+                        // If it's the right port but not a Response/Fault yet, keep waiting
                     }
                 }
             } else if (type == 0x8892) { // PROFINET
