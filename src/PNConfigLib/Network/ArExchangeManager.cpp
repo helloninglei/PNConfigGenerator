@@ -1,11 +1,22 @@
-#line 1 "f:/workspaces/PNConfigGenerator/src/PNConfigLib/Network/ArExchangeManager.cpp"
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
 #include "ArExchangeManager.h"
 #include "DcpScanner.h"
 #include <QDebug>
 #include <QtEndian>
+#include <QElapsedTimer>
+#include <QCoreApplication>
 #include <QNetworkInterface>
 #include <QStringList>
 #include <QThread>
+#include <cstring>
+#include <cstdlib>
+#ifdef Q_OS_WIN
+#include <winsock2.h>
+#include <iphlpapi.h>
+#pragma comment(lib, "iphlpapi.lib")
+#endif
 #include <pcap.h>
 
 namespace PNConfigLib {
@@ -47,65 +58,53 @@ bool ArExchangeManager::start(const QString &interfaceName, const QString &targe
         m_targetMac += cleanTargetMac.mid(i*2, 2).toUpper();
     }
 
-    // Resolve source MAC (using Qt for robustness)
-    memset(m_sourceMac, 0, 6);
-    QList<QNetworkInterface> interfaces = QNetworkInterface::allInterfaces();
-    for (const auto &iface : interfaces) {
-        if (interfaceName.contains(iface.name()) || interfaceName.contains(iface.humanReadableName())) {
-            QString macStr = iface.hardwareAddress();
-            QString hexMac;
-            for (const QChar &c : macStr) if (c.isDigit() || (c.toUpper() >= 'A' && c.toUpper() <= 'F')) hexMac.append(c);
-            if (hexMac.length() == 12) {
-                for (int i = 0; i < 6; ++i) m_sourceMac[i] = (uint8_t)hexMac.mid(i * 2, 2).toInt(nullptr, 16);
-                emit messageLogged(QString("Resolved Source MAC: %1 (%2)")
-                    .arg(iface.hardwareAddress(), iface.humanReadableName()));
-                break;
-            }
-        }
-    }
-
-    if (m_sourceMac[0] == 0 && m_sourceMac[1] == 0 && m_sourceMac[2] == 0) {
-        emit messageLogged("Warning: Failed to resolve source MAC. Simulation might fail.");
-    }
-
-    // CRITICAL FIX: Configure device via DCP BEFORE starting AR
-    emit messageLogged("Step 1: Configuring device via DCP...");
-    
+    // Step 1: Configure device via DCP
     DcpScanner scanner;
     if (!scanner.connectToInterface(interfaceName)) {
         m_lastError = "Failed to connect DCP scanner to interface";
         setState(ArState::Error);
         return false;
     }
-    
-    // Set station name first (REQUIRED before IP can be set)
-    emit messageLogged(QString("Setting station name to: %1").arg(stationName));
+
+    // Capture the source MAC discovered by the scanner
+    memcpy(m_sourceMac, scanner.getSourceMac(), 6);
+    if (m_sourceMac[0] == 0 && m_sourceMac[1] == 0 && m_sourceMac[2] == 0) {
+        emit messageLogged("Error: Source MAC resolution failed.");
+        scanner.disconnectFromInterface();
+        return false;
+    }
+    emit messageLogged(QString("Resolved Source MAC: %1").arg(macToString(m_sourceMac)));
+
+    emit messageLogged(QString("Setting station name to: %1 (Permanent: true)").arg(stationName));
     if (!scanner.setDeviceName(targetMac, stationName, true)) {
         m_lastError = "Failed to set station name via DCP";
         scanner.disconnectFromInterface();
         setState(ArState::Error);
         return false;
     }
-    emit messageLogged("Station name set successfully");
-    
-    // Set IP address (will only be accepted if station name matches)
+    emit messageLogged("Station name set successfully. Waiting 2s for Slave to commit...");
+
+    // Increased delay to ensure the Slave has fully processed the name set and updated its identity
+    QThread::msleep(2000);
+
+    // Calculate default network parameters
     QStringList ipParts = targetIp.split('.');
     QString mask = "255.255.255.0"; // Default subnet mask
     QString gw = ipParts[0] + "." + ipParts[1] + "." + ipParts[2] + ".1"; // Default gateway
-    
-    emit messageLogged(QString("Setting IP to: %1, Mask: %2, Gateway: %3").arg(targetIp, mask, gw));
+
+    emit messageLogged(QString("Setting IP to: %1, Mask: %2, Gateway: %3 (Permanent: true)").arg(targetIp, mask, gw));
     if (!scanner.setDeviceIp(targetMac, targetIp, mask, gw, true)) {
-        m_lastError = "Failed to set IP address via DCP";
+        m_lastError = "Failed to set IP address via DCP. (Is the device locked or still applying the name?)";
         scanner.disconnectFromInterface();
         setState(ArState::Error);
         return false;
     }
-    emit messageLogged("IP address set successfully");
-    
+    emit messageLogged("IP address set successfully. Waiting 1s before starting AR...");
+
     scanner.disconnectFromInterface();
-    
-    // Small delay to let the device process the configuration
-    QThread::msleep(500);
+
+    // Small delay before starting AR to let the IP stack settle
+    QThread::msleep(1000);
     
     emit messageLogged("Step 2: Starting AR connection...");
     setState(ArState::Connecting);
@@ -141,8 +140,15 @@ void ArExchangeManager::onPhaseTimerTick() {
     switch (m_state) {
         case ArState::Connecting:
             if (sendRpcConnect()) {
-                emit messageLogged("Phase 1: Connect request sent.");
-                setState(ArState::Parameterizing);
+                emit messageLogged("Phase 1: Connect request sent. Waiting for response...");
+                int res = waitForResponse(0x0000); // 0x0000 for generic RPC/UDP response matching for now
+                if (res >= 0) {
+                    emit messageLogged("Phase 1: Connect response received.");
+                    setState(ArState::Parameterizing);
+                } else {
+                    emit messageLogged("Phase 1: Connect timeout / failed.");
+                    stop();
+                }
             } else {
                 emit messageLogged("Phase 1: Failed to send Connect.");
                 stop();
@@ -151,11 +157,18 @@ void ArExchangeManager::onPhaseTimerTick() {
             
         case ArState::Parameterizing:
             if (sendRecordData()) {
-                emit messageLogged("Phase 2: Configuration (DCP Signal) sent.");
-                setState(ArState::Running);
-                startCyclicExchange();
+                emit messageLogged("Phase 2: Configuration (DCP Signal) sent. Waiting for response...");
+                int res = waitForResponse(0xFEFD, 0x11223344); // DCP Get/Set with specific XID
+                if (res == 0 || res == 5) {
+                    emit messageLogged("Phase 2: Configuration successful.");
+                    setState(ArState::Running);
+                    startCyclicExchange();
+                } else {
+                    emit messageLogged(QString("Phase 2: Configuration failed (Result: %1).").arg(res));
+                    stop();
+                }
             } else {
-                emit messageLogged("Phase 2: Configuration failed.");
+                emit messageLogged("Phase 2: Configuration failed to send.");
                 stop();
             }
             break;
@@ -171,8 +184,7 @@ void ArExchangeManager::onPhaseTimerTick() {
 }
 
 bool ArExchangeManager::sendRpcConnect() {
-    // Send a real UDP multicast or unicast to trigger slave (PROFINET Port 34964)
-    uint8_t packet[100];
+    uint8_t packet[80];
     memset(packet, 0, sizeof(packet));
     
     QStringList macParts = m_targetMac.split(':');
@@ -180,24 +192,31 @@ bool ArExchangeManager::sendRpcConnect() {
     memcpy(packet + 6, m_sourceMac, 6);
     packet[12] = 0x08; packet[13] = 0x00; // IPv4
     
-    // IP Header
-    packet[14] = 0x45; packet[23] = 0x11; // UDP
-    memcpy(packet + 26, "\xC0\xA8\x01\x01", 4); // Source IP (Simulated)
+    packet[14] = 0x45; // Ver 4, IHL 5
+    packet[16] = 0x00; packet[17] = sizeof(packet) - 14; 
+    packet[18] = 0xAB; packet[19] = 0xCD;
+    packet[22] = 0x40; packet[23] = 0x11; // UDP
+    
     QStringList ipParts = m_targetIp.split('.');
-    if (ipParts.size() == 4) for (int i = 0; i < 4; ++i) packet[30+i] = (uint8_t)ipParts[i].toInt();
-    packet[24] = 0x00; packet[25] = 0x24; // Tot Len
+    if (ipParts.size() == 4) {
+        for (int i = 0; i < 3; ++i) packet[26+i] = (uint8_t)ipParts[i].toInt();
+        packet[29] = 254; 
+        for (int i = 0; i < 4; ++i) packet[30+i] = (uint8_t)ipParts[i].toInt();
+    }
     
-    // UDP Header
-    packet[34] = 0x88; packet[35] = 0x94; // Source 34964
-    packet[36] = 0x88; packet[37] = 0x94; // Dest 34964
-    packet[38] = 0x00; packet[39] = 0x10; // Length
+    uint16_t cksum = calculateIpChecksum(packet + 14, 20);
+    packet[24] = (cksum >> 8); packet[25] = (cksum & 0xFF);
     
-    if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 64) != 0) return false;
+    packet[34] = 0x88; packet[35] = 0x94;
+    packet[36] = 0x88; packet[37] = 0x94;
+    uint16_t udpLen = sizeof(packet) - 14 - 20;
+    packet[38] = (udpLen >> 8); packet[39] = (udpLen & 0xFF);
+    
+    if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, sizeof(packet)) != 0) return false;
     return true;
 }
 
 bool ArExchangeManager::sendRecordData() {
-    // Send a real DCP Signal payload to satisfy slave "Get/Set" expectation
     uint8_t packet[100];
     memset(packet, 0, sizeof(packet));
     
@@ -206,21 +225,23 @@ bool ArExchangeManager::sendRecordData() {
     memcpy(packet + 6, m_sourceMac, 6);
     packet[12] = 0x88; packet[13] = 0x92; // PN
     
-    // DCP Header
     packet[14] = 0xFE; packet[15] = 0xFD; // Get/Set
-    packet[16] = 0x04; // Set
-    packet[17] = 0x01; // Request
+    packet[16] = 0x04; packet[17] = 0x01; // Set Req
     packet[18] = 0x11; packet[19] = 0x22; packet[20] = 0x33; packet[21] = 0x44; // XID
-    packet[24] = 0x00; packet[25] = 0x08; // Data Length (Block header + 4 bytes)
-
-    // Option 0x05 (Control), Suboption 0x03 (Signal)
-    packet[26] = 0x05; packet[27] = 0x03; 
-    packet[28] = 0x00; packet[29] = 0x04; // Block length
-    packet[30] = 0x00; packet[31] = 0x00; // Reserved
-    packet[32] = 0x01; packet[33] = 0x00; // Flash once
+    packet[24] = 0x00; packet[25] = 0x08;
+    packet[26] = 0x05; packet[27] = 0x03; // Control/Signal
+    packet[28] = 0x00; packet[29] = 0x04;
+    packet[32] = 0x01; // Flash
     
     if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 60) != 0) return false;
     return true;
+}
+
+uint16_t ArExchangeManager::calculateIpChecksum(const uint8_t* ipHeader, int len) {
+    uint32_t sum = 0;
+    for (int i = 0; i < len; i += 2) sum += (ipHeader[i] << 8) | ipHeader[i + 1];
+    while (sum >> 16) sum = (sum & 0xFFFF) + (sum >> 16);
+    return ~((uint16_t)sum);
 }
 
 void ArExchangeManager::startCyclicExchange() {
@@ -260,6 +281,69 @@ void ArExchangeManager::sendCyclicFrame() {
     packet[23] = 0x00; // Transfer Status
 
     pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 60);
+}
+
+int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeoutMs) {
+    if (!m_pcapHandle) return -1;
+
+    struct pcap_pkthdr *header;
+    const uint8_t *data;
+    QElapsedTimer timer;
+    timer.start();
+
+    // Mapping for FrameIDs:
+    // 0xFEFD: DCP Get/Set
+    // 0x0000: Generic RPC (matching by IP/Port in sendRpcConnect)
+
+    while (timer.elapsed() < timeoutMs) {
+        int res = pcap_next_ex((pcap_t*)m_pcapHandle, &header, &data);
+        if (res == 1) {
+            if (header->caplen < 14) continue;
+
+            const uint8_t *dest = data;
+            const uint8_t *src = data + 6;
+            uint16_t type = (data[12] << 8) | data[13];
+
+            // Match based on destination MAC being US
+            if (memcmp(dest, m_sourceMac, 6) != 0) continue;
+
+            if (frameId == 0x0000) { // Looking for RPC response
+                if (type == 0x0800) { // IPv4
+                    // Simple check for UDP to our port 34964
+                    if (data[23] == 0x11 && (data[36] << 8 | data[37]) == 34964) {
+                        return 0; // Success
+                    }
+                }
+            } else if (type == 0x8892) { // PROFINET
+                uint16_t capturedFrameId = (data[14] << 8) | data[15];
+                if (capturedFrameId == frameId) {
+                    if (frameId == 0xFEFD) { // DCP
+                        uint32_t capturedXid = (data[18] << 24) | (data[19] << 16) | (data[20] << 8) | data[21];
+                        if (capturedXid == xid) {
+                            // Logic similar to DcpScanner::waitForSetResponse
+                            uint16_t dataLen = (data[24] << 8) | data[25];
+                            if (dataLen >= 7) {
+                                return data[32]; // BlockResult
+                            }
+                            return 0;
+                        }
+                    }
+                }
+            }
+        }
+        QCoreApplication::processEvents();
+    }
+    return -2; // Timeout
+}
+
+QString ArExchangeManager::macToString(const uint8_t *mac) {
+    return QString("%1:%2:%3:%4:%5:%6")
+        .arg(mac[0], 2, 16, QChar('0'))
+        .arg(mac[1], 2, 16, QChar('0'))
+        .arg(mac[2], 2, 16, QChar('0'))
+        .arg(mac[3], 2, 16, QChar('0'))
+        .arg(mac[4], 2, 16, QChar('0'))
+        .arg(mac[5], 2, 16, QChar('0')).toUpper();
 }
 
 } // namespace PNConfigLib

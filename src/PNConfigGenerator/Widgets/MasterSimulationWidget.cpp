@@ -703,7 +703,10 @@ void MasterSimulationWidget::onSlotClicked(int slotIndex)
     
     if (slotIndex == 0) {
         rightTabWidget->setCurrentIndex(0); // Show catalog or keep static?
-        showBasicConfig(m_currentStationInfo);
+        
+        // Get current item to preserve configuration
+        QTreeWidgetItem *item = projectTree->currentItem();
+        showBasicConfig(m_currentStationInfo, item);
     } else {
         showModuleConfig(slotIndex);
         
@@ -930,6 +933,27 @@ void MasterSimulationWidget::showBasicConfig(const PNConfigLib::GsdmlInfo &info,
     ipForm->addRow("网关", editProjectGw);
     ipVbox->addLayout(ipForm);
     configLayout->addWidget(ipGroup);
+    
+    // Auto-save edited configuration to item data
+    if (item) {
+        // Save station name when edited
+        connect(editProjectName, &QLineEdit::textChanged, [item](const QString &text) {
+            if (item) item->setText(0, text);
+        });
+        
+        // Save IP configuration when edited
+        connect(editProjectIp, &QLineEdit::textChanged, [item](const QString &text) {
+            if (item) item->setData(0, RoleIpAddress, text);
+        });
+        
+        connect(editProjectMask, &QLineEdit::textChanged, [item](const QString &text) {
+            if (item) item->setData(0, RoleSubnetMask, text);
+        });
+        
+        connect(editProjectGw, &QLineEdit::textChanged, [item](const QString &text) {
+            if (item) item->setData(0, RoleGateway, text);
+        });
+    }
 
     // 3. IO Cycle Time
     QGroupBox *ioGroup = new QGroupBox("IO周期时间(ms)", this);
@@ -1260,6 +1284,11 @@ void MasterSimulationWidget::onAddOnlineToConfiguration()
     QTreeWidgetItem *newStation = new QTreeWidgetItem(stationsItem, QStringList() << finalName);
     newStation->setIcon(0, qApp->style()->standardIcon(QStyle::SP_ComputerIcon));
     newStation->setData(0, Qt::UserRole, gsdmlIndex);
+    
+    // Initialize network configuration from online device
+    newStation->setData(0, RoleIpAddress, onlineDevice.ipAddress);
+    newStation->setData(0, RoleSubnetMask, onlineDevice.subnetMask);
+    newStation->setData(0, RoleGateway, onlineDevice.gateway);
     
     stationsItem->setExpanded(true);
     statusLabel->setText(QString(" 已将在线设备 %1 添加到配置").arg(finalName));

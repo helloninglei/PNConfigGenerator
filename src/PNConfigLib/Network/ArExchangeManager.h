@@ -42,6 +42,11 @@ private slots:
 private:
     void setState(ArState newState);
     
+    // Response verification
+    int waitForResponse(uint16_t frameId, uint32_t xid = 0, int timeoutMs = 2000);
+    QString macToString(const uint8_t *mac);
+    uint16_t calculateIpChecksum(const uint8_t* ipHeader, int len);
+    
     // Phase 1: Connect
     bool sendRpcConnect();
     
@@ -64,6 +69,7 @@ private:
     QTimer *m_phaseTimer;
     QTimer *m_cyclicTimer;
     int m_phaseStep = 0;
+    uint32_t m_lastXid = 0;
 };
 
 } // namespace PNConfigLib

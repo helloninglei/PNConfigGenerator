@@ -59,10 +59,12 @@ public:
     bool connectToInterface(const QString &interfaceName);
     void disconnectFromInterface();
     bool isConnected() const { return m_isConnected; }
+    const uint8_t* getSourceMac() const { return m_sourceMac; }
 
     QList<DiscoveredDevice> scan();
     bool setDeviceIp(const QString &mac, const QString &ip, const QString &mask, const QString &gw, bool permanent = false);
     bool setDeviceName(const QString &mac, const QString &name, bool permanent = false);
+    bool setDeviceNameAndIp(const QString &mac, const QString &name, const QString &ip, const QString &mask, const QString &gw, bool permanent = false);
     bool resetFactory(const QString &mac);
     bool flashLed(const QString &mac);
 

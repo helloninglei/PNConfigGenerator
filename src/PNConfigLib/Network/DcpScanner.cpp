@@ -363,10 +363,11 @@ bool DcpScanner::setDeviceIp(const QString &mac, const QString &ip, const QStrin
     QStringList gwParts = gw.split('.');
     
     uint8_t *val = packet + sizeof(EthernetHeader) + sizeof(DcpHeader) + 4;
-    // Qualifier: bit 0: Temporary/Permanent, bit 1: Use IP (standard says bit 0 is temp/perm, bit 1 is set IP)
-    // For IP Suite: 0x0001 = Temporary, 0x0002 = Permanent (standard bit mappings can vary by device stack)
-    // Commonly: 0x0001 is Temp, 0x0002 is Permanent. Let's use 0x0001/0x0002 based on typical behavior.
-    val[0] = 0x00; val[1] = permanent ? 0x02 : 0x01; 
+    // BlockQualifier for IP Suite: 0x0001 = Permanent, 0x0000 = Temporary (Standard bit 0)
+    val[0] = 0x00; val[1] = permanent ? 0x01 : 0x00; 
+    
+    qDebug() << "DCP IP Set: MAC=" << mac << "IP=" << ip << "Permanent=" << permanent 
+             << "Qualifier=" << QString("0x%1%2").arg(val[0], 2, 16, QChar('0')).arg(val[1], 2, 16, QChar('0'));
     
     if (ipParts.size() == 4) for (int i = 0; i < 4; ++i) val[2+i] = (uint8_t)ipParts[i].toInt();
     if (maskParts.size() == 4) for (int i = 0; i < 4; ++i) val[6+i] = (uint8_t)maskParts[i].toInt();
@@ -387,7 +388,6 @@ bool DcpScanner::setDeviceIp(const QString &mac, const QString &ip, const QStrin
 
 bool DcpScanner::setDeviceName(const QString &mac, const QString &name, bool permanent) {
     if (!m_isConnected || !m_pcapHandle) return false;
-
     QStringList macParts = mac.split(':');
     if (macParts.size() != 6) return false;
 
@@ -420,8 +420,12 @@ bool DcpScanner::setDeviceName(const QString &mac, const QString &name, bool per
     block->length = qToBigEndian<uint16_t>(nameData.size() + 2); 
     
     uint8_t *val = pktData + sizeof(EthernetHeader) + sizeof(DcpHeader) + 4;
-    val[0] = 0x00; val[1] = permanent ? 0x02 : 0x00; // Block Qualifier: bit 1 is permanent, 0x00 is none (temporary)
+    // Block Qualifier for Name: 0x0002 = Permanent, 0x0000 = Temporary (Standard bit 1)
+    val[0] = 0x00; val[1] = permanent ? 0x02 : 0x00; 
     memcpy(val + 2, nameData.constData(), nameData.size());
+
+    qDebug() << "DCP Name Set: MAC=" << mac << "Name=" << name << "Permanent=" << permanent 
+             << "Qualifier=" << QString("0x%1%2").arg(val[0], 2, 16, QChar('0')).arg(val[1], 2, 16, QChar('0'));
 
     uint32_t xid = 0x12348765;
     dcp->xid = qToBigEndian<uint32_t>(xid);
@@ -429,6 +433,82 @@ bool DcpScanner::setDeviceName(const QString &mac, const QString &name, bool per
     qDebug() << "Sending DCP Set Name request (Source MAC:" << macToString(m_sourceMac) << ", Name:" << name << ", Permanent:" << permanent << ")...";
     if (pcap_sendpacket(m_pcapHandle, (const uint8_t*)pktData, totalLen) != 0) {
         qCritical() << "Error sending DCP Set Name request:" << pcap_geterr(m_pcapHandle);
+        return false;
+    }
+
+    int res = waitForSetResponse(xid);
+    return res == 0 || res == 5;
+}
+
+bool DcpScanner::setDeviceNameAndIp(const QString &mac, const QString &name, const QString &ip, const QString &mask, const QString &gw, bool permanent) {
+    if (!m_isConnected || !m_pcapHandle) return false;
+
+    QStringList macParts = mac.split(':');
+    if (macParts.size() != 6) return false;
+
+    QByteArray nameData = name.toUtf8();
+    int nameBlockLen = nameData.size() + 2; // BlockInfo (2 bytes)
+    if (nameBlockLen % 2 != 0) nameBlockLen++; // Padding
+
+    int ipBlockLen = 14; // BlockInfo (2 bytes) + IP Suite (12 bytes)
+    
+    int totalDataLen = 4 + nameBlockLen + 4 + ipBlockLen; // 2 blocks with headers
+    int totalLen = sizeof(EthernetHeader) + sizeof(DcpHeader) + totalDataLen;
+    if (totalLen < 60) totalLen = 60;
+
+    QByteArray packet(totalLen, 0);
+    uint8_t *pktData = (uint8_t*)packet.data();
+
+    // Ethernet Header
+    EthernetHeader *eth = (EthernetHeader*)pktData;
+    for (int i = 0; i < 6; ++i) eth->dest[i] = (uint8_t)macParts[i].toInt(nullptr, 16);
+    memcpy(eth->src, m_sourceMac, 6);
+    eth->type = qToBigEndian<uint16_t>(0x8892);
+
+    // DCP Header
+    DcpHeader *dcp = (DcpHeader*)(pktData + sizeof(EthernetHeader));
+    dcp->frameId = qToBigEndian<uint16_t>(0xFEFD);
+    dcp->serviceId = 0x04; // Set Request
+    dcp->serviceType = 0x01;
+    uint32_t xid = 0x11223344;
+    dcp->xid = qToBigEndian<uint32_t>(xid);
+    dcp->responseDelay = qToBigEndian<uint16_t>(0x00FF);
+    dcp->dcpDataLength = qToBigEndian<uint16_t>(totalDataLen);
+
+    uint8_t *payload = pktData + sizeof(EthernetHeader) + sizeof(DcpHeader);
+
+    // Block 1: NameOfStation
+    DcpBlockHeader *nameBlock = (DcpBlockHeader*)payload;
+    nameBlock->option = 0x02;    // Device Properties
+    nameBlock->suboption = 0x02; // Name of Station
+    nameBlock->length = qToBigEndian<uint16_t>(nameData.size() + 2);
+    
+    uint8_t *nameVal = payload + 4;
+    nameVal[0] = 0x00; nameVal[1] = permanent ? 0x00 : 0x02; // BlockQualifier
+    memcpy(nameVal + 2, nameData.constData(), nameData.size());
+
+    // Block 2: IP Suite  
+    int ipBlockOffset = 4 + nameBlockLen;
+    DcpBlockHeader *ipBlock = (DcpBlockHeader*)(payload + ipBlockOffset);
+    ipBlock->option = 0x01;    // IP
+    ipBlock->suboption = 0x02; // IP Suite
+    ipBlock->length = qToBigEndian<uint16_t>(14);
+
+    uint8_t *ipVal = payload + ipBlockOffset + 4;
+    ipVal[0] = 0x00; ipVal[1] = permanent ? 0x00 : 0x01; // BlockQualifier
+
+    QStringList ipParts = ip.split('.');
+    QStringList maskParts = mask.split('.');
+    QStringList gwParts = gw.split('.');
+    
+    if (ipParts.size() == 4) for (int i = 0; i < 4; ++i) ipVal[2+i] = (uint8_t)ipParts[i].toInt();
+    if (maskParts.size() == 4) for (int i = 0; i < 4; ++i) ipVal[6+i] = (uint8_t)maskParts[i].toInt();
+    if (gwParts.size() == 4) for (int i = 0; i < 4; ++i) ipVal[10+i] = (uint8_t)gwParts[i].toInt();
+
+    qDebug() << "Sending COMBINED DCP Set request (Name + IP) to" << mac << "- Name:" << name << "IP:" << ip << "Permanent:" << permanent;
+    
+    if (pcap_sendpacket(m_pcapHandle, (const uint8_t*)pktData, totalLen) != 0) {
+        qCritical() << "Error sending combined DCP Set request:" << pcap_geterr(m_pcapHandle);
         return false;
     }
 
