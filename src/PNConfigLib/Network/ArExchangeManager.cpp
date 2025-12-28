@@ -186,7 +186,7 @@ void ArExchangeManager::onPhaseTimerTick() {
 }
 
 bool ArExchangeManager::sendRpcConnect() {
-    uint8_t packet[160]; 
+    uint8_t packet[512]; 
     memset(packet, 0, sizeof(packet));
     
     // Ethernet & IP Headers (same as before)
@@ -196,8 +196,6 @@ bool ArExchangeManager::sendRpcConnect() {
     packet[12] = 0x08; packet[13] = 0x00;
     
     packet[14] = 0x45;
-    uint16_t ipTotLen = sizeof(packet) - 14;
-    packet[16] = (ipTotLen >> 8); packet[17] = (ipTotLen & 0xFF);
     packet[18] = 0xAB; packet[19] = 0xCD;
     packet[22] = 0x40; packet[23] = 0x11;
     
@@ -207,13 +205,9 @@ bool ArExchangeManager::sendRpcConnect() {
         packet[29] = 254;
         for (int i = 0; i < 4; ++i) packet[30+i] = (uint8_t)ipParts[i].toInt();
     }
-    uint16_t cksum = calculateIpChecksum(packet + 14, 20);
-    packet[24] = (cksum >> 8); packet[25] = (cksum & 0xFF);
     
     packet[34] = 0x88; packet[35] = 0x94;
     packet[36] = 0x88; packet[37] = 0x94;
-    uint16_t udpLen = sizeof(packet) - 14 - 20;
-    packet[38] = (udpLen >> 8); packet[39] = (udpLen & 0xFF);
     
     // --- DCE RPC Header (starts at 42) ---
     uint8_t *rpc = packet + 42;
@@ -248,8 +242,8 @@ bool ArExchangeManager::sendRpcConnect() {
     rpc[52] = 0x01; rpc[53] = 0x00; // Ver 1.0
 
     // Body Length is at offset 74
-    // We'll send a 64-byte body containing an ARBlockRequest
-    uint16_t bodyLen = 64; 
+    // We'll send a 200-byte body containing AR, IOCR and AlarmCR blocks
+    uint16_t bodyLen = 200; 
     rpc[74] = (bodyLen & 0xFF); rpc[75] = ((bodyLen >> 8) & 0xFF);
 
     // Fragment Number is at offset 76
@@ -257,18 +251,59 @@ bool ArExchangeManager::sendRpcConnect() {
 
     // --- DCE RPC Body (starts at 42 + 80 = 122) ---
     uint8_t *body = packet + 122;
-    // ARBlockRequest (Type 0x0101)
-    body[0] = 0x01; body[1] = 0x01; // Type
-    body[2] = 0x00; body[3] = 0x3C; // Length (60 bytes following)
-    body[4] = 0x01; body[5] = 0x00; // Version 1.0
-    body[6] = 0x00; body[7] = 0x01; // ARType: IO-AR
-    // ARUUID (16 bytes)
-    static const uint8_t arUuid[] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF };
-    memcpy(body + 8, arUuid, 16);
-    // SessionKey, CM-Initiator-MAC etc. (rest is just filler for now)
-    memcpy(body + 24, m_sourceMac, 6);
+    int offset = 0;
 
-    if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, sizeof(packet)) != 0) return false;
+    // Block 1: ARBlockRequest (Type 0x0101, Length 60)
+    body[offset++] = 0x01; body[offset++] = 0x01; // Type
+    body[offset++] = 0x00; body[offset++] = 0x3C; // Length
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version 1.0
+    body[offset++] = 0x00; body[offset++] = 0x01; // ARType: IO-AR
+    static const uint8_t arUuid[] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF };
+    memcpy(body + offset, arUuid, 16); offset += 16;
+    body[offset++] = 0x00; body[offset++] = 0x01; // Session Key
+    memcpy(body + offset, m_sourceMac, 6); offset += 6; // CM-Initiator-MAC
+    offset = 64; // End of Block 1 padding
+
+    // Block 2: IOCRBlockRequest (Input, Type 0x0102, Length 40)
+    body[offset++] = 0x01; body[offset++] = 0x02; // Type
+    body[offset++] = 0x00; body[offset++] = 0x28; // Length
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version
+    body[offset++] = 0x00; body[offset++] = 0x01; // IOCRType: Input
+    body[offset++] = 0x00; body[offset++] = 0x01; // IOCR Reference
+    body[offset++] = 0x88; body[offset++] = 0x92; // LT
+    offset = 64 + 44; // End of Block 2 padding
+
+    // Block 3: IOCRBlockRequest (Output, Type 0x0102, Length 40)
+    body[offset++] = 0x01; body[offset++] = 0x02; // Type
+    body[offset++] = 0x00; body[offset++] = 0x28; // Length
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version
+    body[offset++] = 0x00; body[offset++] = 0x02; // IOCRType: Output
+    body[offset++] = 0x00; body[offset++] = 0x02; // IOCR Reference
+    body[offset++] = 0x88; body[offset++] = 0x92; // LT
+    offset = 64 + 44 + 44; // End of Block 3 padding
+
+    // Block 4: AlarmCRBlockRequest (Type 0x0103, Length 44)
+    body[offset++] = 0x01; body[offset++] = 0x03; // Type
+    body[offset++] = 0x00; body[offset++] = 0x2C; // Length
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version
+    body[offset++] = 0x00; body[offset++] = 0x01; // AlarmCRType
+    body[offset++] = 0x00; body[offset++] = 0x01; // Ethernet Type
+    // Padding to 200 total body bytes
+
+    // Finalize Lengths
+    uint16_t bodyLenVal = (uint16_t)offset;
+    rpc[74] = (bodyLenVal & 0xFF); rpc[75] = ((bodyLenVal >> 8) & 0xFF);
+    
+    uint16_t udpLenFull = (uint16_t)(8 + 80 + bodyLenVal);
+    packet[38] = (udpLenFull >> 8); packet[39] = (udpLenFull & 0xFF);
+    
+    uint16_t ipTotLenFull = (uint16_t)(20 + udpLenFull);
+    packet[16] = (ipTotLenFull >> 8); packet[17] = (ipTotLenFull & 0xFF);
+    
+    uint16_t cksumVal = calculateIpChecksum(packet + 14, 20);
+    packet[24] = (cksumVal >> 8); packet[25] = (cksumVal & 0xFF);
+
+    if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 14 + ipTotLenFull) != 0) return false;
     return true;
 }
 
@@ -362,6 +397,15 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
 
             // MATCH ALL PACKETS FROM TARGET FOR LOGGING
             if (memcmp(src, m_targetMacBytes, 6) == 0) {
+                if (type == 0x0806) { // ARP
+                    uint16_t op = (data[20] << 8 | data[21]);
+                    if (op == 1) { // Request
+                        // Target IP is at offset 38. Checking for 192.168.0.254
+                        if (data[38] == 192 && data[39] == 168 && data[40] == 0 && data[41] == 254) {
+                            sendArpResponse(src, data + 28); // Requestor's IP is at 28
+                        }
+                    }
+                }
                 emit messageLogged(QString("  [Packet from Target] Dest: %1 Type: 0x%2")
                     .arg(macToString(dest)).arg(type, 4, 16, QChar('0')));
             }
@@ -408,6 +452,36 @@ QString ArExchangeManager::macToString(const uint8_t *mac) {
         .arg(mac[3], 2, 16, QChar('0'))
         .arg(mac[4], 2, 16, QChar('0'))
         .arg(mac[5], 2, 16, QChar('0')).toUpper();
+}
+
+bool ArExchangeManager::sendArpResponse(const uint8_t* targetMac, const uint8_t* targetIp) {
+    if (!m_pcapHandle) return false;
+    uint8_t packet[42];
+    memset(packet, 0, sizeof(packet));
+
+    // Ethernet Header
+    memcpy(packet, targetMac, 6);       // Dest MAC
+    memcpy(packet + 6, m_sourceMac, 6); // Source MAC
+    packet[12] = 0x08; packet[13] = 0x06; // ARP type
+
+    // ARP Header
+    packet[14] = 0x00; packet[15] = 0x01; // Hardware: Ethernet
+    packet[16] = 0x08; packet[17] = 0x00; // Protocol: IPv4
+    packet[18] = 0x06;                    // Hardware Size
+    packet[19] = 0x04;                    // Protocol Size
+    packet[20] = 0x00; packet[21] = 0x02; // Opcode: Reply
+
+    // Sender MAC/IP (Master)
+    memcpy(packet + 22, m_sourceMac, 6);
+    packet[28] = 192; packet[29] = 168; packet[30] = 0; packet[31] = 254;
+
+    // Target MAC/IP (Slave)
+    memcpy(packet + 32, targetMac, 6);
+    memcpy(packet + 38, targetIp, 4);
+
+    if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, sizeof(packet)) != 0) return false;
+    emit messageLogged(QString("  [ARP Reply Out] To Slave for 192.168.0.254"));
+    return true;
 }
 
 } // namespace PNConfigLib

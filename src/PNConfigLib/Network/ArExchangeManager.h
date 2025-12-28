@@ -49,6 +49,7 @@ private:
     
     // Phase 1: Connect
     bool sendRpcConnect();
+    bool sendArpResponse(const uint8_t* targetMac, const uint8_t* targetIp);
     
     // Phase 2: Parameterize
     bool sendRecordData();
