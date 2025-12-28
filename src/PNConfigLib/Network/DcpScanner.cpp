@@ -363,7 +363,8 @@ bool DcpScanner::setDeviceIp(const QString &mac, const QString &ip, const QStrin
     QStringList gwParts = gw.split('.');
     
     uint8_t *val = packet + sizeof(EthernetHeader) + sizeof(DcpHeader) + 4;
-    // BlockQualifier for IP Suite: 0x0001 = Permanent, 0x0000 = Temporary (Standard bit 0)
+    // BlockQualifier: Bit 0 = 0 (Temporary), Bit 0 = 1 (Permanent)
+    // Consolidating to Bit 0 for both IP and Name as per slave compatibility findings.
     val[0] = 0x00; val[1] = permanent ? 0x01 : 0x00; 
     
     qDebug() << "DCP IP Set: MAC=" << mac << "IP=" << ip << "Permanent=" << permanent 
@@ -420,8 +421,9 @@ bool DcpScanner::setDeviceName(const QString &mac, const QString &name, bool per
     block->length = qToBigEndian<uint16_t>(nameData.size() + 2); 
     
     uint8_t *val = pktData + sizeof(EthernetHeader) + sizeof(DcpHeader) + 4;
-    // Block Qualifier for Name: 0x0002 = Permanent, 0x0000 = Temporary (Standard bit 1)
-    val[0] = 0x00; val[1] = permanent ? 0x02 : 0x00; 
+    // Block Qualifier for Name: Standard says bit 1 is Temp/Perm, but this slave
+    // appears to use Bit 0 (0x01) for Permanent as well. Consolidation for compatibility.
+    val[0] = 0x00; val[1] = permanent ? 0x01 : 0x00; 
     memcpy(val + 2, nameData.constData(), nameData.size());
 
     qDebug() << "DCP Name Set: MAC=" << mac << "Name=" << name << "Permanent=" << permanent 

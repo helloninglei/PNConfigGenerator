@@ -41,12 +41,10 @@ bool ArExchangeManager::start(const QString &interfaceName, const QString &targe
     m_targetIp = targetIp;
     m_stationName = stationName;
 
-    char errbuf[PCAP_ERRBUF_SIZE];
-    m_pcapHandle = pcap_open_live(interfaceName.toStdString().c_str(), 65536, 1, 10, errbuf);
-    if (!m_pcapHandle) {
-        m_lastError = QString("Failed to open adapter: %1").arg(errbuf);
-        setState(ArState::Error);
-        return false;
+    // Initialize target MAC bytes for fast matching
+    QStringList parts = m_targetMac.split(':');
+    if (parts.size() == 6) {
+        for (int i = 0; i < 6; ++i) m_targetMacBytes[i] = (uint8_t)parts[i].toInt(nullptr, 16);
     }
 
     // Capture source MAC - Clean up target MAC and resolve source
@@ -101,11 +99,15 @@ bool ArExchangeManager::start(const QString &interfaceName, const QString &targe
     }
     emit messageLogged("IP address set successfully. Waiting 1s before starting AR...");
 
-    scanner.disconnectFromInterface();
+    // Open local pcap handle AFTER DCP is done to avoid interference
+    char errbuf[PCAP_ERRBUF_SIZE];
+    m_pcapHandle = pcap_open_live(interfaceName.toStdString().c_str(), 65536, 1, 10, errbuf);
+    if (!m_pcapHandle) {
+        m_lastError = QString("Failed to open adapter after DCP: %1").arg(errbuf);
+        setState(ArState::Error);
+        return false;
+    }
 
-    // Small delay before starting AR to let the IP stack settle
-    QThread::msleep(1000);
-    
     emit messageLogged("Step 2: Starting AR connection...");
     setState(ArState::Connecting);
     m_phaseStep = 0;
@@ -184,26 +186,27 @@ void ArExchangeManager::onPhaseTimerTick() {
 }
 
 bool ArExchangeManager::sendRpcConnect() {
-    uint8_t packet[80];
+    uint8_t packet[160]; 
     memset(packet, 0, sizeof(packet));
     
+    // Ethernet & IP Headers (same as before)
     QStringList macParts = m_targetMac.split(':');
     if (macParts.size() == 6) for (int i = 0; i < 6; ++i) packet[i] = (uint8_t)macParts[i].toInt(nullptr, 16);
     memcpy(packet + 6, m_sourceMac, 6);
-    packet[12] = 0x08; packet[13] = 0x00; // IPv4
+    packet[12] = 0x08; packet[13] = 0x00;
     
-    packet[14] = 0x45; // Ver 4, IHL 5
-    packet[16] = 0x00; packet[17] = sizeof(packet) - 14; 
+    packet[14] = 0x45;
+    uint16_t ipTotLen = sizeof(packet) - 14;
+    packet[16] = (ipTotLen >> 8); packet[17] = (ipTotLen & 0xFF);
     packet[18] = 0xAB; packet[19] = 0xCD;
-    packet[22] = 0x40; packet[23] = 0x11; // UDP
+    packet[22] = 0x40; packet[23] = 0x11;
     
     QStringList ipParts = m_targetIp.split('.');
     if (ipParts.size() == 4) {
         for (int i = 0; i < 3; ++i) packet[26+i] = (uint8_t)ipParts[i].toInt();
-        packet[29] = 254; 
+        packet[29] = 254;
         for (int i = 0; i < 4; ++i) packet[30+i] = (uint8_t)ipParts[i].toInt();
     }
-    
     uint16_t cksum = calculateIpChecksum(packet + 14, 20);
     packet[24] = (cksum >> 8); packet[25] = (cksum & 0xFF);
     
@@ -212,6 +215,59 @@ bool ArExchangeManager::sendRpcConnect() {
     uint16_t udpLen = sizeof(packet) - 14 - 20;
     packet[38] = (udpLen >> 8); packet[39] = (udpLen & 0xFF);
     
+    // --- DCE RPC Header (starts at 42) ---
+    uint8_t *rpc = packet + 42;
+    rpc[0] = 4;        // RPC Version
+    rpc[1] = 0;        // PDU Type: Request
+    rpc[2] = 0x20;     // Flags1: Idempotent
+    rpc[3] = 0;        // Flags2
+    rpc[4] = 0x10;     // Data Rep (Little Endian, IEEE Float, ASCII)
+    rpc[8] = 0;        // Serial High
+    
+    // Interface UUID: DEA00001-6C97-11D1-8271-00A02442DF7D 
+    // PROFINET standard: first three fields are LITTLE ENDIAN in the wire packet.
+    // DEA00001 -> 01 00 A0 DE (Wait, DE A0 00 01)
+    // Actually, DCE RPC defines UUID as: 4-2-2-2-6
+    // DEA00001 (4 bytes) - 6C97 (2 bytes) - 11D1 (2 bytes) ...
+    // In p-net: 0x01, 0x00, 0xA0, 0xDE, 0x97, 0x6C, 0xD1, 0x11 ...
+    const uint8_t ifUuid[] = { 0x01, 0x00, 0xA0, 0xDE, 0x97, 0x6C, 0xD1, 0x11, 0x82, 0x71, 0x00, 0xA0, 0x24, 0x42, 0xDF, 0x7D };
+    
+    // Interface UUID starts at offset 24 in RPC packet (42 + 24 = 66 in Ethernet)
+    memcpy(rpc + 24, ifUuid, 16); 
+    // Activity UUID (often all 0s or random) starts at offset 8
+    memset(rpc + 8, 0xAA, 16); // Random activity ID
+    
+    // Sequence Number starts at offset 64
+    static uint32_t seq = 100;
+    rpc[64] = (seq & 0xFF); rpc[65] = ((seq >> 8) & 0xFF); rpc[66] = 0; rpc[67] = 0;
+    
+    // Opnum starts at offset 68
+    rpc[68] = 0; rpc[69] = 0; // Opnum 0 (Connect)
+    
+    // Interface Version starts at offset 52
+    rpc[52] = 0x01; rpc[53] = 0x00; // Ver 1.0
+
+    // Body Length is at offset 74
+    // We'll send a 64-byte body containing an ARBlockRequest
+    uint16_t bodyLen = 64; 
+    rpc[74] = (bodyLen & 0xFF); rpc[75] = ((bodyLen >> 8) & 0xFF);
+
+    // Fragment Number is at offset 76
+    rpc[76] = 0; rpc[77] = 0;
+
+    // --- DCE RPC Body (starts at 42 + 80 = 122) ---
+    uint8_t *body = packet + 122;
+    // ARBlockRequest (Type 0x0101)
+    body[0] = 0x01; body[1] = 0x01; // Type
+    body[2] = 0x00; body[3] = 0x3C; // Length (60 bytes following)
+    body[4] = 0x01; body[5] = 0x00; // Version 1.0
+    body[6] = 0x00; body[7] = 0x01; // ARType: IO-AR
+    // ARUUID (16 bytes)
+    static const uint8_t arUuid[] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF };
+    memcpy(body + 8, arUuid, 16);
+    // SessionKey, CM-Initiator-MAC etc. (rest is just filler for now)
+    memcpy(body + 24, m_sourceMac, 6);
+
     if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, sizeof(packet)) != 0) return false;
     return true;
 }
@@ -304,18 +360,26 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
             const uint8_t *src = data + 6;
             uint16_t type = (data[12] << 8) | data[13];
 
+            // MATCH ALL PACKETS FROM TARGET FOR LOGGING
+            if (memcmp(src, m_targetMacBytes, 6) == 0) {
+                emit messageLogged(QString("  [Packet from Target] Dest: %1 Type: 0x%2")
+                    .arg(macToString(dest)).arg(type, 4, 16, QChar('0')));
+            }
+
             // Match based on destination MAC being US
             if (memcmp(dest, m_sourceMac, 6) != 0) continue;
 
             if (frameId == 0x0000) { // Looking for RPC response
                 if (type == 0x0800) { // IPv4
-                    // Simple check for UDP to our port 34964
-                    if (data[23] == 0x11 && (data[36] << 8 | data[37]) == 34964) {
-                        return 0; // Success
+                    uint16_t destPort = (data[36] << 8 | data[37]);
+                    if (data[23] == 0x11) { // UDP
+                        emit messageLogged(QString("  [RPC Packet Captured] DestPort: %1 Len: %2").arg(destPort).arg(header->caplen));
+                        if (destPort == 34964) return 0; // Success
                     }
                 }
             } else if (type == 0x8892) { // PROFINET
                 uint16_t capturedFrameId = (data[14] << 8) | data[15];
+                emit messageLogged(QString("  [PN Packet Captured] FrameID: 0x%1").arg(capturedFrameId, 4, 16, QChar('0')));
                 if (capturedFrameId == frameId) {
                     if (frameId == 0xFEFD) { // DCP
                         uint32_t capturedXid = (data[18] << 24) | (data[19] << 16) | (data[20] << 8) | data[21];

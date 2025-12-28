@@ -64,6 +64,7 @@ private:
     QString m_stationName;
     
     uint8_t m_sourceMac[6];
+    uint8_t m_targetMacBytes[6];
     void* m_pcapHandle = nullptr;
     
     QTimer *m_phaseTimer;
