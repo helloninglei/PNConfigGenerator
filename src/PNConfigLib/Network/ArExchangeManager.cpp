@@ -139,6 +139,7 @@ void ArExchangeManager::setState(ArState newState) {
 }
 
 void ArExchangeManager::onPhaseTimerTick() {
+    m_phaseTimer->stop(); // Stop while processing to prevent overlaps
     switch (m_state) {
         case ArState::Connecting:
             if (sendRpcConnect()) {
@@ -147,6 +148,7 @@ void ArExchangeManager::onPhaseTimerTick() {
                 if (res >= 0) {
                     emit messageLogged("Phase 1: Connect response received.");
                     setState(ArState::Parameterizing);
+                    m_phaseTimer->start(500); // Trigger next phase
                 } else {
                     emit messageLogged("Phase 1: Connect timeout / failed.");
                     stop();
@@ -186,166 +188,194 @@ void ArExchangeManager::onPhaseTimerTick() {
 }
 
 bool ArExchangeManager::sendRpcConnect() {
-    uint8_t packet[512]; 
+    uint8_t packet[1024]; 
     memset(packet, 0, sizeof(packet));
     
-    // Ethernet & IP Headers
+    // Ethernet Header
     QStringList macParts = m_targetMac.split(':');
     if (macParts.size() == 6) for (int i = 0; i < 6; ++i) packet[i] = (uint8_t)macParts[i].toInt(nullptr, 16);
     memcpy(packet + 6, m_sourceMac, 6);
-    packet[12] = 0x08; packet[13] = 0x00;
+    packet[12] = 0x08; packet[13] = 0x00; // IPv4
     
-    packet[14] = 0x45;
-    packet[18] = 0xAB; packet[19] = 0xCD;
-    packet[22] = 0x40; packet[23] = 0x11;
+    // IP Header
+    packet[14] = 0x45; // Version 4, IHL 5
+    packet[18] = 0x12; packet[19] = 0x34; // Identification
+    packet[22] = 0x40; packet[23] = 0x11; // TTL 64, Protocol UDP
     
+    // IPs
+    packet[26] = 192; packet[27] = 168; packet[28] = 0; packet[29] = 254; // Source
     QStringList ipParts = m_targetIp.split('.');
-    if (ipParts.size() == 4) {
-        for (int i = 0; i < 3; ++i) packet[26+i] = (uint8_t)ipParts[i].toInt();
-        packet[29] = 254;
-        for (int i = 0; i < 4; ++i) packet[30+i] = (uint8_t)ipParts[i].toInt();
-    }
+    if (ipParts.size() == 4) for (int i = 0; i < 4; ++i) packet[30+i] = (uint8_t)ipParts[i].toInt();
     
-    packet[34] = 0x88; packet[35] = 0x94;
-    packet[36] = 0x88; packet[37] = 0x94;
+    // UDP Header
+    packet[34] = 0x88; packet[35] = 0x94; // Source Port
+    packet[36] = 0x88; packet[37] = 0x94; // Dest Port
     
-    // --- DCE RPC Header (starts at 42) ---
+    // DCE RPC Header (offset 42)
     uint8_t *rpc = packet + 42;
     rpc[0] = 4;        // RPC Version
     rpc[1] = 0;        // PDU Type: Request
-    rpc[2] = 0x23;     // Flags1: Idempotent (0x20) | Last Frag (0x02) | First Frag (0x01)
+    rpc[2] = 0x23;     // Flags1: Idempotent | Last Frag | First Frag
     rpc[3] = 0;        // Flags2
-    rpc[4] = 0x10;     // Data Rep (Little Endian, IEEE Float, ASCII)
-    rpc[8] = 0;        // Object UUID (Starts at offset 8, usually Nil/0s)
-    memset(rpc + 8, 0, 16);
+    rpc[4] = 0x00;     // Data Rep (Big Endian)
+    rpc[5] = 0x00;
+    rpc[6] = 0x00;
+    rpc[7] = 0x00;
+    memset(rpc + 8, 0, 16); // Object UUID (Zero for CM)
     
-    // Interface UUID: DEA00001-6C97-11D1-8271-00A02442DF7D (offset 24)
-    const uint8_t ifUuid[] = { 0x01, 0x00, 0xA0, 0xDE, 0x97, 0x6C, 0xD1, 0x11, 0x82, 0x71, 0x00, 0xA0, 0x24, 0x42, 0xDF, 0x7D };
-    memcpy(rpc + 24, ifUuid, 16); 
+    // Interface UUID (DEA00001-6C97-11D1-8271)
+    rpc[24] = 0xDE; rpc[25] = 0xA0; rpc[26] = 0x00; rpc[27] = 0x01;
+    rpc[28] = 0x6C; rpc[29] = 0x97;
+    rpc[30] = 0x11; rpc[31] = 0xD1;
+    const uint8_t ifUuidTail[] = { 0x82, 0x71, 0x00, 0xA0, 0x24, 0x42, 0xDF, 0x7D };
+    memcpy(rpc + 32, ifUuidTail, 8); 
     
-    // Activity UUID (offset 40)
-    memset(rpc + 40, 0xAA, 16); // Activity ID
-    
-    // Interface Version starts at offset 60
-    rpc[60] = 0x01; rpc[61] = 0x00; rpc[62] = 0x01; rpc[63] = 0x00; // Ver 1.1
-    
-    // Sequence Number starts at offset 64
+    memset(rpc + 40, 0xAA, 16); // Activity UUID
+    rpc[60] = 0x00; rpc[61] = 0x01; rpc[62] = 0x00; rpc[63] = 0x01; // Version 1.1
     static uint32_t seq = 100;
-    rpc[64] = (seq & 0xFF); rpc[65] = ((seq >> 8) & 0xFF); rpc[66] = 0; rpc[67] = 0;
-    
-    // Opnum starts at offset 68
-    rpc[68] = 0; rpc[69] = 0; // Opnum 0 (Connect)
-    
-    // Hints
-    rpc[70] = 0xFF; rpc[71] = 0xFF; 
+    rpc[64] = (seq >> 24); rpc[65] = (seq >> 16); rpc[66] = (seq >> 8); rpc[67] = (seq & 0xFF);
+    rpc[68] = 0; rpc[69] = 0; // Opnum Connect
+    rpc[70] = 0xFF; rpc[71] = 0xFF; // Hints
     rpc[72] = 0xFF; rpc[73] = 0xFF;
+    rpc[76] = 0; rpc[77] = 0; // FragNum
+    rpc[78] = 0; // Auth Proto
+    rpc[79] = 0; // Serial Low
 
-    // FragNum at 76
-    rpc[76] = 0; rpc[77] = 0;
-
-    // --- DCE RPC Body (starts at 122) ---
+    // Body (offset 122)
     uint8_t *body = packet + 122;
     int offset = 0;
 
-    // Block 1: ARBlockRequest (Type 0x0101, Length 56)
-    int b1_start = offset;
-    body[offset++] = 0x01; body[offset++] = 0x01; // Type 0x0101
-    body[offset++] = 0x00; body[offset++] = 0x38; // Length 56
-    body[offset++] = 0x01; body[offset++] = 0x00; // Version 1.0
-    body[offset++] = 0x00; body[offset++] = 0x01; // ARType: IO-AR
-    static const uint8_t arUuid[] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF };
+    // NDR Header (20 bytes)
+    body[offset++] = 0; body[offset++] = 0; body[offset++] = 2; body[offset++] = 0; // Max (512)
+    int ndrLenPos = offset; offset += 4;
+    int arrayMaxPos = offset; offset += 4;
+    body[offset++] = 0; body[offset++] = 0; body[offset++] = 0; body[offset++] = 0; // ArrayOffset
+    int arrayActualPos = offset; offset += 4;
+
+    int blocksStart = offset;
+
+    // Block 1: ARBlockRequest (Type 0x0101)
+    body[offset++] = 0x01; body[offset++] = 0x01; // Type
+    int b1LenPos = offset; offset += 2;
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version
+    body[offset++] = 0x00; body[offset++] = 0x01; // ARType
+    static const uint8_t arUuid[] = { 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
     memcpy(body + offset, arUuid, 16); offset += 16;
     body[offset++] = 0x00; body[offset++] = 0x01; // Session Key
-    memcpy(body + offset, m_sourceMac, 6); offset += 6; // CM-Initiator-MAC
-    memset(body + offset, 0, 16); offset += 16; // Object UUID
-    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x02; body[offset++] = 0x01; // ARProperties (Pull allowed)
-    body[offset++] = 0x0B; body[offset++] = 0xB8; // Activity Timeout (3000ms)
-    body[offset++] = 0x88; body[offset++] = 0x94; // Initiator UDP Port
-    body[offset++] = 0x00; body[offset++] = 0x00; // Station Name Length
-    while (offset < b1_start + 60) body[offset++] = 0x00; 
+    memcpy(body + offset, m_sourceMac, 6); offset += 6;
+    // Object UUID: DEA00000-6C97-11D1-8271-00A02442DF7D
+    body[offset++] = 0xDE; body[offset++] = 0xA0; body[offset++] = 0x00; body[offset++] = 0x00;
+    body[offset++] = 0x6C; body[offset++] = 0x97;
+    body[offset++] = 0x11; body[offset++] = 0xD1;
+    body[offset++] = 0x82; body[offset++] = 0x71;
+    body[offset++] = 0x00; body[offset++] = 0xA0; body[offset++] = 0x24; body[offset++] = 0x42; body[offset++] = 0xDF; body[offset++] = 0x7D;
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x02; body[offset++] = 0x11; // Props
+    body[offset++] = 0x00; body[offset++] = 0x64; // Timeout
+    body[offset++] = 0x88; body[offset++] = 0x94; // Port
+    QByteArray name = m_stationName.toUtf8();
+    body[offset++] = (name.length() >> 8); body[offset++] = (name.length() & 0xFF);
+    memcpy(body + offset, name.constData(), name.length()); offset += name.length();
+    uint16_t b1Len = (uint16_t)(offset - b1LenPos - 2);
+    body[b1LenPos] = (b1Len >> 8); body[b1LenPos+1] = (b1Len & 0xFF);
 
-    // Block 2: IOCR (Input, Type 0x0102, Length 40)
-    int b2_start = offset;
-    body[offset++] = 0x01; body[offset++] = 0x02; // Type 0x0102
-    body[offset++] = 0x00; body[offset++] = 0x28; // Length 40
-    body[offset++] = 0x01; body[offset++] = 0x00; // Version 1.0
-    body[offset++] = 0x00; body[offset++] = 0x01; // IOCRType: Input
-    body[offset++] = 0x00; body[offset++] = 0x01; // IOCR Reference
-    body[offset++] = 0x88; body[offset++] = 0x92; // LT
-    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // IOCRProperties
-    body[offset++] = 0x00; body[offset++] = 0x01; // Reduction Ratio
-    body[offset++] = 0x00; body[offset++] = 0x01; // Phase
-    body[offset++] = 0x00; body[offset++] = 0x01; // Sequence
-    body[offset++] = 0x80; body[offset++] = 0x01; // FrameID
-    body[offset++] = 0x00; body[offset++] = 0x40; // DB Length (64)
-    body[offset++] = 0x00; body[offset++] = 0x03; // WD Factor
-    body[offset++] = 0x00; body[offset++] = 0x03; // DataHold Factor
-    body[offset++] = 0x00; body[offset++] = 0x00; // IOCR Tag
+    // Block 2 & 3: IOCR (Input & Output)
+    for (int i = 0; i < 2; ++i) {
+        body[offset++] = 0x01; body[offset++] = 0x02;
+        int bLenPos = offset; offset += 2;
+        body[offset++] = 0x01; body[offset++] = 0x00; // Version
+        body[offset++] = 0x00; body[offset++] = (i == 0 ? 0x01 : 0x02); // Type
+        body[offset++] = 0x00; body[offset++] = (i == 0 ? 0x01 : 0x02); // Ref
+        body[offset++] = 0x88; body[offset++] = 0x92; // LT
+        body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x02; // Props (RT_CLASS_2)
+        body[offset++] = 0x00; body[offset++] = 0x42; // DataLen 66 (64 data + 1 IOPS + 1 IOCS)
+        body[offset++] = 0x80; body[offset++] = (i == 0 ? 0x01 : 0x02); // FrameID
+        body[offset++] = 0x00; body[offset++] = 0x10; // Clock
+        body[offset++] = 0x00; body[offset++] = 0x10; // RR
+        body[offset++] = 0x00; body[offset++] = 0x01; // Phase
+        body[offset++] = 0x00; body[offset++] = 0x00; // Sequence
+        body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // Offset
+        body[offset++] = 0x00; body[offset++] = 0x03; // WD
+        body[offset++] = 0x00; body[offset++] = 0x03; // DH
+        body[offset++] = 0xC0; body[offset++] = 0x00; // Tag (Priority 6, VLAN 0)
+        memset(body + offset, 0, 6); offset += 6; // Multicast
+        body[offset++] = 0x00; body[offset++] = 0x01; // NbrAPIs
+        body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API 0
+        body[offset++] = 0x00; body[offset++] = 0x01; // NbrIOData
+        body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
+        body[offset++] = 0x00; body[offset++] = 0x01; // Subslot 1
+        body[offset++] = 0x00; body[offset++] = 0x00; // FrameOffset 0
+        body[offset++] = 0x00; body[offset++] = 0x01; // NbrIOCS
+        body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
+        body[offset++] = 0x00; body[offset++] = 0x01; // Subslot 1
+        body[offset++] = 0x00; body[offset++] = 0x41; // FrameOffset 65 (Data 64 + IOPS 1)
+        uint16_t bLen = (uint16_t)(offset - bLenPos - 2);
+        body[bLenPos] = (bLen >> 8); body[bLenPos+1] = (bLen & 0xFF);
+    }
+
+    // Block 4: AlarmCR (Type 0x0103)
+    body[offset++] = 0x01; body[offset++] = 0x03; // Type
+    body[offset++] = 0x00; body[offset++] = 0x16; // Length 22 (2 bytes version + 20 bytes payload)
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version
+    body[offset++] = 0x00; body[offset++] = 0x01; // AlarmCRType: TCP/UDP
+    body[offset++] = 0x08; body[offset++] = 0x00; // LTField: 0x0800
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x02; // Properties: TransportUDP=1
+    body[offset++] = 0x00; body[offset++] = 0x64; // TimeoutFactor: 100
+    body[offset++] = 0x00; body[offset++] = 0x03; // Retries: 3
+    body[offset++] = 0x00; body[offset++] = 0x01; // LocalAlarmReference
+    body[offset++] = 0x00; body[offset++] = 0xC8; // MaxAlarmDataLength: 200
+    body[offset++] = 0xC0; body[offset++] = 0x00; // TagHeaderHigh (Priority 6, VLAN 0)
+    body[offset++] = 0xA0; body[offset++] = 0x00; // TagHeaderLow (Priority 5, VLAN 0)
+
+    // Block 5: ExpectedSubmodule (Type 0x0104)
+    body[offset++] = 0x01; body[offset++] = 0x04;
+    int b5LenPos = offset; offset += 2;
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version
+    body[offset++] = 0x00; body[offset++] = 0x01; // NbrAPIs
     body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API 0
-    while (offset < b2_start + 44) body[offset++] = 0x00;
-
-    // Block 3: IOCR (Output, Type 0x0102, Length 40)
-    int b3_start = offset;
-    body[offset++] = 0x01; body[offset++] = 0x02; // Type 0x0102
-    body[offset++] = 0x00; body[offset++] = 0x28; // Length 40
-    body[offset++] = 0x01; body[offset++] = 0x00; // Version 1.0
-    body[offset++] = 0x00; body[offset++] = 0x02; // IOCRType: Output
-    body[offset++] = 0x00; body[offset++] = 0x02; // IOCR Reference
-    body[offset++] = 0x88; body[offset++] = 0x92; // LT
-    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // IOCRProperties
-    body[offset++] = 0x00; body[offset++] = 0x01; // RR
-    body[offset++] = 0x00; body[offset++] = 0x01; // Phase
-    body[offset++] = 0x00; body[offset++] = 0x01; // Sequence
-    body[offset++] = 0x80; body[offset++] = 0x02; // FrameID
-    body[offset++] = 0x00; body[offset++] = 0x40; // DB Length
-    body[offset++] = 0x00; body[offset++] = 0x03; // WD Factor
-    body[offset++] = 0x00; body[offset++] = 0x03; // DataHold Factor
-    body[offset++] = 0x00; body[offset++] = 0x00; // Tag
-    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API
-    while (offset < b3_start + 44) body[offset++] = 0x00;
-
-    // Block 4: AlarmCR (Type 0x0103, Length 40)
-    int b4_start = offset;
-    body[offset++] = 0x01; body[offset++] = 0x03; // Type 0x0103
-    body[offset++] = 0x00; body[offset++] = 0x28; // Length 40
-    body[offset++] = 0x01; body[offset++] = 0x00; // Version 1.0
-    body[offset++] = 0x00; body[offset++] = 0x01; // AlarmCRType
-    body[offset++] = 0x08; body[offset++] = 0x00; // EthType
-    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // Properties
-    body[offset++] = 0x00; body[offset++] = 0x01; // Timeout
-    body[offset++] = 0x00; body[offset++] = 0x01; // Retries
-    body[offset++] = 0x88; body[offset++] = 0x94; // Local Port
-    body[offset++] = 0x88; body[offset++] = 0x94; // Remote Port
-    while (offset < b4_start + 44) body[offset++] = 0x00;
-
-    // Block 5: ExpectedSubmodule (Type 0x0104, Length 20)
-    int b5_start = offset;
-    body[offset++] = 0x01; body[offset++] = 0x04; // Type 0x0104
-    body[offset++] = 0x00; body[offset++] = 0x14; // Length 20
-    body[offset++] = 0x01; body[offset++] = 0x00; // Version 1.0
-    body[offset++] = 0x00; body[offset++] = 0x01; // #API
-    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API 0
-    body[offset++] = 0x00; body[offset++] = 0x01; // #Modules
     body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
-    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // Module ID
-    body[offset++] = 0x00; body[offset++] = 0x00; // #Submodules
-    while (offset < b5_start + 24) body[offset++] = 0x00;
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // Ident 1
+    body[offset++] = 0x00; body[offset++] = 0x00; // ModuleProps 0
+    body[offset++] = 0x00; body[offset++] = 0x01; // NbrSubmodules 1
+    body[offset++] = 0x00; body[offset++] = 0x01; // Subslot 1
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // Ident 1
+    body[offset++] = 0x00; body[offset++] = 0x03; // SubmoduleProps (IO)
+    body[offset++] = 0x00; body[offset++] = 0x01; // DataDirection (Descriptor 1: Input)
+    body[offset++] = 0x00; body[offset++] = 0x40; // DataLength (Input)
+    body[offset++] = 0x01; // LengthIOCS
+    body[offset++] = 0x01; // LengthIOPS
+    body[offset++] = 0x00; body[offset++] = 0x02; // DataDirection (Descriptor 2: Output)
+    body[offset++] = 0x00; body[offset++] = 0x40; // DataLength (Output)
+    body[offset++] = 0x01; // LengthIOCS
+    body[offset++] = 0x01; // LengthIOPS
+    uint16_t b5Len = (uint16_t)(offset - b5LenPos - 2);
+    body[b5LenPos] = (b5Len >> 8); body[b5LenPos+1] = (b5Len & 0xFF);
 
-    // Finalize Lengths
-    uint16_t bodyLenVal = (uint16_t)offset;
-    rpc[74] = (bodyLenVal & 0xFF); rpc[75] = ((bodyLenVal >> 8) & 0xFF);
+    // Finalize NDR
+    uint32_t totalBody = (uint32_t)offset;
+    uint32_t totalBlocks = (uint32_t)(offset - blocksStart); // args_length should be blocks only
     
-    uint16_t udpLenFull = (uint16_t)(8 + 80 + bodyLenVal);
-    packet[38] = (udpLenFull >> 8); packet[39] = (udpLenFull & 0xFF);
+    // args_length (Position 4-7)
+    body[ndrLenPos] = 0; body[ndrLenPos+1] = 0;
+    body[ndrLenPos+2] = (totalBlocks >> 8); body[ndrLenPos+3] = (totalBlocks & 0xFF);
     
-    uint16_t ipTotLenFull = (uint16_t)(20 + udpLenFull);
-    packet[16] = (ipTotLenFull >> 8); packet[17] = (ipTotLenFull & 0xFF);
+    // maximum_count (Position 8-11)
+    body[arrayMaxPos] = 0; body[arrayMaxPos+1] = 0;
+    body[arrayMaxPos+2] = (totalBlocks >> 8); body[arrayMaxPos+3] = (totalBlocks & 0xFF);
     
-    uint16_t cksumVal = calculateIpChecksum(packet + 14, 20);
-    packet[24] = (cksumVal >> 8); packet[25] = (cksumVal & 0xFF);
+    // actual_count (Position 16-19)
+    body[arrayActualPos] = 0; body[arrayActualPos+1] = 0;
+    body[arrayActualPos+2] = (totalBlocks >> 8); body[arrayActualPos+3] = (totalBlocks & 0xFF);
 
-    if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 14 + ipTotLenFull) != 0) return false;
-    return true;
+    // Finalize RPC/UDP/IP
+    rpc[74] = (offset >> 8); rpc[75] = (offset & 0xFF);
+    uint16_t udpLen = (uint16_t)(8 + 80 + offset);
+    packet[38] = (udpLen >> 8); packet[39] = (udpLen & 0xFF);
+    uint16_t ipLen = (uint16_t)(20 + udpLen);
+    packet[16] = (ipLen >> 8); packet[17] = (ipLen & 0xFF);
+    uint16_t cksum = calculateIpChecksum(packet + 14, 20);
+    packet[24] = (cksum >> 8); packet[25] = (cksum & 0xFF);
+
+    return pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 14 + ipLen) == 0;
 }
 
 bool ArExchangeManager::sendRecordData() {
@@ -461,7 +491,7 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
                         uint8_t pduType = data[43]; // Offset 42+1 (PDU Type)
                         if (pduType == 2) { // Response
                             if (header->caplen >= 126) {
-                                uint32_t retVal = data[122] | (data[123] << 8) | (data[124] << 16) | (data[125] << 24);
+                                uint32_t retVal = (uint32_t(data[122]) << 24) | (uint32_t(data[123]) << 16) | (uint32_t(data[124]) << 8) | uint32_t(data[125]);
                                 emit messageLogged(QString("  [RPC Response] Return Value: 0x%1").arg(retVal, 8, 16, QChar('0')));
                                 if (retVal == 0) return 0; // Success
                                 return -3; // Slave rejected (e.g. 0xDB814001)

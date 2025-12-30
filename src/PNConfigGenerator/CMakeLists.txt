@@ -2,6 +2,8 @@
 
 set(SOURCES
     main.cpp
+    SimulationController.cpp
+    SimulationController.h
     MainWindow.cpp
     MainWindow.h
     MainWindow.ui
