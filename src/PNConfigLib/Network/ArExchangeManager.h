@@ -15,6 +15,7 @@ enum class ArState {
     Offline,
     Connecting,
     Parameterizing,
+    AppReady,
     Running,
     Error
 };
@@ -53,8 +54,9 @@ private:
     
     // Phase 2: Parameterize
     bool sendRecordData();
+    bool sendRpcControlParamEnd();
     
-    // Phase 3: Cyclic Data
+    // Phase 3: AppReady & Cyclic Data
     void startCyclicExchange();
 
     ArState m_state = ArState::Offline;

@@ -111,7 +111,7 @@ bool ArExchangeManager::start(const QString &interfaceName, const QString &targe
     emit messageLogged("Step 2: Starting AR connection...");
     setState(ArState::Connecting);
     m_phaseStep = 0;
-    m_phaseTimer->start(500); // Faster transitions for simulation
+    m_phaseTimer->start(100); // Faster transitions for simulation
     
     return true;
 }
@@ -160,19 +160,32 @@ void ArExchangeManager::onPhaseTimerTick() {
             break;
             
         case ArState::Parameterizing:
-            if (sendRecordData()) {
-                emit messageLogged("Phase 2: Configuration (DCP Signal) sent. Waiting for response...");
-                int res = waitForResponse(0xFEFD, 0x11223344); // DCP Get/Set with specific XID
-                if (res == 0 || res == 5) {
-                    emit messageLogged("Phase 2: Configuration successful.");
-                    setState(ArState::Running);
-                    startCyclicExchange();
+            if (sendRpcControlParamEnd()) {
+                emit messageLogged("Phase 2: ParamEnd sent. Waiting for response...");
+                int res = waitForResponse(0x0001); // Special code to match RPC Control response
+                if (res == 0) {
+                    emit messageLogged("Phase 2: ParamEnd accepted by Slave.");
+                    setState(ArState::AppReady);
+                    startCyclicExchange(); // Start output data exchange immediately
+                    m_phaseTimer->start(100);
                 } else {
-                    emit messageLogged(QString("Phase 2: Configuration failed (Result: %1).").arg(res));
+                    emit messageLogged(QString("Phase 2: ParamEnd rejected (Result: 0x%1).").arg(res, 8, 16, QChar('0')));
                     stop();
                 }
             } else {
-                emit messageLogged("Phase 2: Configuration failed to send.");
+                emit messageLogged("Phase 2: Failed to send ParamEnd.");
+                stop();
+            }
+            break;
+
+        case ArState::AppReady:
+            emit messageLogged("Phase 3: Waiting for ApplicationReady from Slave...");
+            if (waitForResponse(0x0002) == 0) { // Special code to match CControl/AppReady request
+                emit messageLogged("Phase 3: ApplicationReady received. AR established.");
+                setState(ArState::Running);
+                // Cyclic exchange already started in Phase 2
+            } else {
+                emit messageLogged("Phase 3: ApplicationReady timeout.");
                 stop();
             }
             break;
@@ -287,7 +300,7 @@ bool ArExchangeManager::sendRpcConnect() {
         body[offset++] = 0x00; body[offset++] = (i == 0 ? 0x01 : 0x02); // Ref
         body[offset++] = 0x88; body[offset++] = 0x92; // LT
         body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x02; // Props (RT_CLASS_2)
-        body[offset++] = 0x00; body[offset++] = 0x42; // DataLen 66 (64 data + 1 IOPS + 1 IOCS)
+        body[offset++] = 0x00; body[offset++] = 0x03; // DataLen 3 (1 data + 1 IOPS + 1 IOCS)
         body[offset++] = 0x80; body[offset++] = (i == 0 ? 0x01 : 0x02); // FrameID
         body[offset++] = 0x00; body[offset++] = 0x10; // Clock
         body[offset++] = 0x00; body[offset++] = 0x10; // RR
@@ -307,7 +320,7 @@ bool ArExchangeManager::sendRpcConnect() {
         body[offset++] = 0x00; body[offset++] = 0x01; // NbrIOCS
         body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
         body[offset++] = 0x00; body[offset++] = 0x01; // Subslot 1
-        body[offset++] = 0x00; body[offset++] = 0x41; // FrameOffset 65 (Data 64 + IOPS 1)
+        body[offset++] = 0x00; body[offset++] = 0x02; // FrameOffset 2 (Data 1 + IOPS 1)
         uint16_t bLen = (uint16_t)(offset - bLenPos - 2);
         body[bLenPos] = (bLen >> 8); body[bLenPos+1] = (bLen & 0xFF);
     }
@@ -333,18 +346,18 @@ bool ArExchangeManager::sendRpcConnect() {
     body[offset++] = 0x00; body[offset++] = 0x01; // NbrAPIs
     body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API 0
     body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
-    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // Ident 1
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x32; // Ident 0x32 (Digital IO)
     body[offset++] = 0x00; body[offset++] = 0x00; // ModuleProps 0
     body[offset++] = 0x00; body[offset++] = 0x01; // NbrSubmodules 1
     body[offset++] = 0x00; body[offset++] = 0x01; // Subslot 1
-    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; // Ident 1
+    body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x01; body[offset++] = 0x32; // Ident 0x132
     body[offset++] = 0x00; body[offset++] = 0x03; // SubmoduleProps (IO)
     body[offset++] = 0x00; body[offset++] = 0x01; // DataDirection (Descriptor 1: Input)
-    body[offset++] = 0x00; body[offset++] = 0x40; // DataLength (Input)
+    body[offset++] = 0x00; body[offset++] = 0x01; // DataLength 1
     body[offset++] = 0x01; // LengthIOCS
     body[offset++] = 0x01; // LengthIOPS
     body[offset++] = 0x00; body[offset++] = 0x02; // DataDirection (Descriptor 2: Output)
-    body[offset++] = 0x00; body[offset++] = 0x40; // DataLength (Output)
+    body[offset++] = 0x00; body[offset++] = 0x01; // DataLength 1
     body[offset++] = 0x01; // LengthIOCS
     body[offset++] = 0x01; // LengthIOPS
     uint16_t b5Len = (uint16_t)(offset - b5LenPos - 2);
@@ -399,6 +412,85 @@ bool ArExchangeManager::sendRecordData() {
     return true;
 }
 
+bool ArExchangeManager::sendRpcControlParamEnd() {
+    uint8_t packet[1024]; 
+    memset(packet, 0, sizeof(packet));
+    
+    // Ethernet Header
+    QStringList macParts = m_targetMac.split(':');
+    if (macParts.size() == 6) for (int i = 0; i < 6; ++i) packet[i] = (uint8_t)macParts[i].toInt(nullptr, 16);
+    memcpy(packet + 6, m_sourceMac, 6);
+    packet[12] = 0x08; packet[13] = 0x00; // IPv4
+    
+    // IP Header
+    packet[14] = 0x45; packet[18] = 0x55; packet[19] = 0x66; // Ident
+    packet[22] = 0x40; packet[23] = 0x11; // TTL, UDP
+    packet[26] = 192; packet[27] = 168; packet[28] = 0; packet[29] = 254; // Source
+    QStringList ipParts = m_targetIp.split('.');
+    if (ipParts.size() == 4) for (int i = 0; i < 4; ++i) packet[30+i] = (uint8_t)ipParts[i].toInt();
+    
+    // UDP Header
+    packet[34] = 0x88; packet[35] = 0x94; // Source Port
+    packet[36] = 0x88; packet[37] = 0x94; // Dest Port
+    
+    // DCE RPC Header (offset 42)
+    uint8_t *rpc = packet + 42;
+    rpc[0] = 4; rpc[1] = 0; // Request
+    rpc[2] = 0x23; // Flags
+    rpc[4] = 0x00; // Data Rep
+    
+    // Interface UUID (DEA00001-6C97-11D1-8271)
+    rpc[24] = 0xDE; rpc[25] = 0xA0; rpc[26] = 0x00; rpc[27] = 0x01;
+    rpc[28] = 0x6C; rpc[29] = 0x97;
+    rpc[30] = 0x11; rpc[31] = 0xD1;
+    const uint8_t ifUuidTail[] = { 0x82, 0x71, 0x00, 0xA0, 0x24, 0x42, 0xDF, 0x7D };
+    memcpy(rpc + 32, ifUuidTail, 8); 
+    
+    memset(rpc + 40, 0xAA, 16); // Activity UUID
+    rpc[60] = 0x00; rpc[61] = 0x01; rpc[62] = 0x00; rpc[63] = 0x01;
+    rpc[64] = 0; rpc[65] = 0; rpc[66] = 0; rpc[67] = 101; // Seq
+    rpc[68] = 0; rpc[69] = 4; // Opnum Control (0x0004)
+    
+    // Body (offset 122)
+    uint8_t *body = packet + 122;
+    int offset = 0;
+    body[offset++] = 0; body[offset++] = 0; body[offset++] = 2; body[offset++] = 0; // NDR Max
+    int ndrLenPos = offset; offset += 4;
+    int arrayMaxPos = offset; offset += 4;
+    body[offset++] = 0; body[offset++] = 0; body[offset++] = 0; body[offset++] = 0; // ArrayOffset
+    int arrayActualPos = offset; offset += 4;
+
+    int blocksStart = offset;
+
+    // Block: ControlRequest (Type 0x0110)
+    body[offset++] = 0x01; body[offset++] = 0x10; // ParamEnd
+    body[offset++] = 0x00; body[offset++] = 0x1A; // Length 26
+    body[offset++] = 0x01; body[offset++] = 0x00; // Version
+    body[offset++] = 0x00; body[offset++] = 0x00; // Padding
+    static const uint8_t arUuid[] = { 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
+    memcpy(body + offset, arUuid, 16); offset += 16;
+    body[offset++] = 0x00; body[offset++] = 0x01; // Session Key
+    body[offset++] = 0x00; body[offset++] = 0x00; // Alarm Seq
+    body[offset++] = 0x00; body[offset++] = 0x01; // Command: ParamEnd
+    body[offset++] = 0x00; body[offset++] = 0x00; // Properties
+
+    // Finalize NDR
+    uint32_t totalBlocks = (uint32_t)(offset - blocksStart);
+    body[ndrLenPos+2] = (totalBlocks >> 8); body[ndrLenPos+3] = (totalBlocks & 0xFF);
+    body[arrayMaxPos+2] = (totalBlocks >> 8); body[arrayMaxPos+3] = (totalBlocks & 0xFF);
+    body[arrayActualPos+2] = (totalBlocks >> 8); body[arrayActualPos+3] = (totalBlocks & 0xFF);
+
+    rpc[74] = (offset >> 8); rpc[75] = (offset & 0xFF);
+    uint16_t udpLen = (uint16_t)(8 + 80 + offset);
+    packet[38] = (udpLen >> 8); packet[39] = (udpLen & 0xFF);
+    uint16_t ipLen = (uint16_t)(20 + udpLen);
+    packet[16] = (ipLen >> 8); packet[17] = (ipLen & 0xFF);
+    uint16_t cksum = calculateIpChecksum(packet + 14, 20);
+    packet[24] = (cksum >> 8); packet[25] = (cksum & 0xFF);
+
+    return pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 14 + ipLen) == 0;
+}
+
 uint16_t ArExchangeManager::calculateIpChecksum(const uint8_t* ipHeader, int len) {
     uint32_t sum = 0;
     for (int i = 0; i < len; i += 2) sum += (ipHeader[i] << 8) | ipHeader[i + 1];
@@ -425,22 +517,24 @@ void ArExchangeManager::sendCyclicFrame() {
     // Ethertype 0x8892
     packet[12] = 0x88; packet[13] = 0x92;
 
-    // PROFINET RT Header (FrameID 0x8000)
-    packet[14] = 0x80; packet[15] = 0x00;
+    // PROFINET RT Header (FrameID 0x8002 for Master Output)
+    packet[14] = 0x80; packet[15] = 0x02;
 
-    // IO Data (Simulated 4 bytes)
-    static uint8_t val = 0;
-    packet[16] = val++; packet[17] = 0x00; packet[18] = 0x00; packet[19] = 0x00;
+    // IO Data Object 1 (1 byte data + 1 byte IOPS)
+    packet[16] = 0x00; // Data
+    packet[17] = 0x80; // IOPS Good
+    
+    // IOCS for Slave Input (1 byte)
+    packet[18] = 0x80; // IOCS Good
 
-    // Cycle Counter (Standard PN style)
+    // Footer (Positioned after 3 bytes payload)
     static uint16_t cycleCounter = 0;
-    packet[20] = (cycleCounter >> 8) & 0xFF;
-    packet[21] = cycleCounter & 0xFF;
-    cycleCounter += 32; // Increment by 31-32 as per RT class 1/3 typical
+    packet[19] = (cycleCounter >> 8) & 0xFF;
+    packet[20] = cycleCounter & 0xFF;
+    cycleCounter += 32;
 
-    // Data Status (0x35: Valid, OK, Primary)
-    packet[22] = 0x35;
-    packet[23] = 0x00; // Transfer Status
+    packet[21] = 0x35; // Data Status (Valid, Primary, OK)
+    packet[22] = 0x00; // Transfer Status
 
     pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 60);
 }
@@ -484,9 +578,8 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
             // Match based on destination MAC being US
             if (memcmp(dest, m_sourceMac, 6) != 0) continue;
 
-            if (frameId == 0x0000) { // Looking for RPC response
+            if (frameId == 0x0000 || frameId == 0x0001) { // Looking for RPC response
                 if (type == 0x0800) { // IPv4
-                    uint16_t destPort = (data[36] << 8 | data[37]);
                     if (data[23] == 0x11) { // UDP
                         uint8_t pduType = data[43]; // Offset 42+1 (PDU Type)
                         if (pduType == 2) { // Response
@@ -494,13 +587,48 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
                                 uint32_t retVal = (uint32_t(data[122]) << 24) | (uint32_t(data[123]) << 16) | (uint32_t(data[124]) << 8) | uint32_t(data[125]);
                                 emit messageLogged(QString("  [RPC Response] Return Value: 0x%1").arg(retVal, 8, 16, QChar('0')));
                                 if (retVal == 0) return 0; // Success
-                                return -3; // Slave rejected (e.g. 0xDB814001)
+                                return (int)retVal; // Return error code
                             }
                         } else if (pduType == 3) {
                             emit messageLogged("  [RPC Fault] DCE RPC Fault received.");
                             return -4;
                         }
-                        // If it's the right port but not a Response/Fault yet, keep waiting
+                    }
+                }
+            } else if (frameId == 0x0002) { // Looking for RPC Request (AppReady)
+                if (type == 0x0800 && data[23] == 0x11) {
+                    uint8_t pduType = data[43];
+                    uint16_t opnum = (data[110] << 8) | data[111]; 
+                    if (pduType == 0 && opnum == 4) { // Request, opnum Control (4)
+                        emit messageLogged("  [RPC Request] Control Request (AppReady) received.");
+                        // Send Control Response Pos
+                        uint8_t resp[256];
+                        memcpy(resp, data + 6, 6); // Dest = Original Src
+                        memcpy(resp + 6, data, 6);   // Src = Original Dest
+                        resp[12] = 0x08; resp[13] = 0x00;
+                        memcpy(resp + 14, data + 14, 20); // Copy IP header template
+                        resp[26] = data[30]; resp[27] = data[31]; resp[28] = data[32]; resp[29] = data[33];
+                        resp[30] = data[26]; resp[31] = data[27]; resp[32] = data[28]; resp[33] = data[29];
+                        resp[34] = data[36]; resp[35] = data[37]; resp[36] = data[34]; resp[37] = data[35];
+                        uint8_t *r_rpc = resp + 42;
+                        memcpy(r_rpc, data + 42, 80);
+                        r_rpc[1] = 2; // Response
+                        r_rpc[68] = 0; r_rpc[69] = 4; // Set Opnum 4 in response too
+                        uint8_t *r_body = resp + 122;
+                        memset(r_body, 0, 32); 
+                        r_body[2] = 0x00; r_body[3] = 0x08; // NDR Len 8
+                        
+                        // Recalculate Body Len in RPC and IP Header
+                        uint16_t r_bodyLen = 80 + 8; // RPC Header + Body
+                        resp[38] = ((r_bodyLen + 8) >> 8); resp[39] = ((r_bodyLen + 8) & 0xFF); // UDP Len
+                        uint16_t r_ipLen = r_bodyLen + 8 + 20;
+                        resp[16] = (r_ipLen >> 8); resp[17] = (r_ipLen & 0xFF);
+                        resp[24] = 0; resp[25] = 0;
+                        uint16_t r_cksum = calculateIpChecksum(resp + 14, 20);
+                        resp[24] = (r_cksum >> 8); resp[25] = (r_cksum & 0xFF);
+                        
+                        pcap_sendpacket((pcap_t*)m_pcapHandle, resp, 14 + r_ipLen);
+                        return 0;
                     }
                 }
             } else if (type == 0x8892) { // PROFINET

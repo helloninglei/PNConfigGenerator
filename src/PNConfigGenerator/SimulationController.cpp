@@ -103,6 +103,9 @@ void SimulationController::onArStateChanged(PNConfigLib::ArState state)
         case PNConfigLib::ArState::Parameterizing:
             qDebug() << "AR State: Parameterizing (Phase 2)";
             break;
+        case PNConfigLib::ArState::AppReady:
+            qDebug() << "AR State: AppReady (Waiting for Slave)";
+            break;
         case PNConfigLib::ArState::Running:
             qDebug() << "AR State: Running (Cyclic Data Exchange)";
             // We can exit on success after a few cycles
