@@ -42,6 +42,7 @@ bool ArExchangeManager::start(const QString &interfaceName, const QString &targe
     m_stationName = stationName;
 
     // Initialize target MAC bytes for fast matching
+    memset(m_targetMacBytes, 0, 6);
     QStringList parts = m_targetMac.split(':');
     if (parts.size() == 6) {
         for (int i = 0; i < 6; ++i) m_targetMacBytes[i] = (uint8_t)parts[i].toInt(nullptr, 16);
@@ -314,11 +315,11 @@ bool ArExchangeManager::sendRpcConnect() {
         body[offset++] = 0x00; body[offset++] = 0x01; // NbrAPIs
         body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API 0
         body[offset++] = 0x00; body[offset++] = 0x01; // NbrIOData
-        body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
+        body[offset++] = 0x00; body[offset++] = 0x02; // Slot 2
         body[offset++] = 0x00; body[offset++] = 0x01; // Subslot 1
         body[offset++] = 0x00; body[offset++] = 0x00; // FrameOffset 0
         body[offset++] = 0x00; body[offset++] = 0x01; // NbrIOCS
-        body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
+        body[offset++] = 0x00; body[offset++] = 0x02; // Slot 2
         body[offset++] = 0x00; body[offset++] = 0x01; // Subslot 1
         body[offset++] = 0x00; body[offset++] = 0x02; // FrameOffset 2 (Data 1 + IOPS 1)
         uint16_t bLen = (uint16_t)(offset - bLenPos - 2);
@@ -345,7 +346,7 @@ bool ArExchangeManager::sendRpcConnect() {
     body[offset++] = 0x01; body[offset++] = 0x00; // Version
     body[offset++] = 0x00; body[offset++] = 0x01; // NbrAPIs
     body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API 0
-    body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
+    body[offset++] = 0x00; body[offset++] = 0x02; // Slot 2
     body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x32; // Ident 0x32 (Digital IO)
     body[offset++] = 0x00; body[offset++] = 0x00; // ModuleProps 0
     body[offset++] = 0x00; body[offset++] = 0x01; // NbrSubmodules 1
@@ -527,14 +528,14 @@ void ArExchangeManager::sendCyclicFrame() {
     // IOCS for Slave Input (1 byte)
     packet[18] = 0x80; // IOCS Good
 
-    // Footer (Positioned after 3 bytes payload)
+    // Footer (Positioned at the end of the 60-byte Ethernet packet)
     static uint16_t cycleCounter = 0;
-    packet[19] = (cycleCounter >> 8) & 0xFF;
-    packet[20] = cycleCounter & 0xFF;
+    packet[56] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
+    packet[57] = cycleCounter & 0xFF;        // CycleCounter Low
     cycleCounter += 32;
 
-    packet[21] = 0x35; // Data Status (Valid, Primary, OK)
-    packet[22] = 0x00; // Transfer Status
+    packet[58] = 0x35; // Data Status (Valid, Primary, OK)
+    packet[59] = 0x00; // Transfer Status
 
     pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 60);
 }
@@ -566,7 +567,7 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
                     uint16_t op = (data[20] << 8 | data[21]);
                     if (op == 1) { // Request
                         // Target IP is at offset 38. Checking for 192.168.0.254
-                        if (data[38] == 192 && data[39] == 168 && data[40] == 0 && data[41] == 254) {
+                        if (header->caplen >= 42 && data[38] == 192 && data[39] == 168 && data[40] == 0 && data[41] == 254) {
                             sendArpResponse(src, data + 28); // Requestor's IP is at 28
                         }
                     }
@@ -581,7 +582,8 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
             if (frameId == 0x0000 || frameId == 0x0001) { // Looking for RPC response
                 if (type == 0x0800) { // IPv4
                     if (data[23] == 0x11) { // UDP
-                        uint8_t pduType = data[43]; // Offset 42+1 (PDU Type)
+            if (header->caplen < 44) continue;
+            uint8_t pduType = data[43]; // Offset 42+1 (PDU Type)
                         if (pduType == 2) { // Response
                             if (header->caplen >= 126) {
                                 uint32_t retVal = (uint32_t(data[122]) << 24) | (uint32_t(data[123]) << 16) | (uint32_t(data[124]) << 8) | uint32_t(data[125]);
@@ -598,8 +600,9 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
             } else if (frameId == 0x0002) { // Looking for RPC Request (AppReady)
                 if (type == 0x0800 && data[23] == 0x11) {
                     uint8_t pduType = data[43];
-                    uint16_t opnum = (data[110] << 8) | data[111]; 
-                    if (pduType == 0 && opnum == 4) { // Request, opnum Control (4)
+                    if (header->caplen >= 112) {
+                        uint16_t opnum = (data[110] << 8) | data[111]; 
+                        if (pduType == 0 && opnum == 4) { // Request, opnum Control (4)
                         emit messageLogged("  [RPC Request] Control Request (AppReady) received.");
                         // Send Control Response Pos
                         uint8_t resp[256];
@@ -631,21 +634,12 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
                         return 0;
                     }
                 }
-            } else if (type == 0x8892) { // PROFINET
-                uint16_t capturedFrameId = (data[14] << 8) | data[15];
-                emit messageLogged(QString("  [PN Packet Captured] FrameID: 0x%1").arg(capturedFrameId, 4, 16, QChar('0')));
-                if (capturedFrameId == frameId) {
-                    if (frameId == 0xFEFD) { // DCP
-                        uint32_t capturedXid = (data[18] << 24) | (data[19] << 16) | (data[20] << 8) | data[21];
-                        if (capturedXid == xid) {
-                            // Logic similar to DcpScanner::waitForSetResponse
-                            uint16_t dataLen = (data[24] << 8) | data[25];
-                            if (dataLen >= 7) {
-                                return data[32]; // BlockResult
-                            }
-                            return 0;
-                        }
-                    }
+            }
+        } else if (frameId != 0xFEFD && type == 0x8892) { // PROFINET (not DCP matching branch)
+                if (header->caplen >= 16) {
+                    uint16_t capturedFrameId = (data[14] << 8) | data[15];
+                    emit messageLogged(QString("  [PN Packet Captured] FrameID: 0x%1").arg(capturedFrameId, 4, 16, QChar('0')));
+                    if (capturedFrameId == frameId) return 0;
                 }
             }
         }
