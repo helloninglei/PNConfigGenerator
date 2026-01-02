@@ -538,30 +538,35 @@ void ArExchangeManager::sendCyclicFrame() {
     if (macParts.size() == 6) for (int i = 0; i < 6; ++i) packet[i] = (uint8_t)macParts[i].toInt(nullptr, 16);
     memcpy(packet + 6, m_sourceMac, 6);
     
+    // VLAN Tag (802.1Q) - Priority 6, VLAN 0
+    packet[12] = 0x81; packet[13] = 0x00;
+    packet[14] = 0xC0; packet[15] = 0x00;
+
     // Ethertype 0x8892
-    packet[12] = 0x88; packet[13] = 0x92;
+    packet[16] = 0x88; packet[17] = 0x92;
 
     // PROFINET RT Header (FrameID 0x8002 for Master Output)
-    packet[14] = 0x80; packet[15] = 0x02;
+    packet[18] = 0x80; packet[19] = 0x02;
 
     // IO Data Object 1 (1 byte data + 1 byte IOPS)
-    packet[16] = m_outputData; // Data from UI
-    packet[17] = 0x80; // IOPS Good
+    packet[20] = m_outputData; // Data from UI
+    packet[21] = 0x80; // IOPS Good
     
     // IOCS for Slave Input (1 byte)
-    packet[18] = 0x80; // IOCS Good
+    packet[22] = 0x80; // IOCS Good
 
-    // Footer (Positioned at the end of the 60-byte Ethernet packet)
+    // Footer (Positioned at the end of the 64-byte Ethernet packet)
     static uint16_t cycleCounter = 0;
-    packet[56] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
-    packet[57] = cycleCounter & 0xFF;        // CycleCounter Low
+    packet[60] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
+    packet[61] = cycleCounter & 0xFF;        // CycleCounter Low
     cycleCounter += 32;
 
-    packet[58] = 0x35; // Data Status (Valid, Primary, OK)
-    packet[59] = 0x00; // Transfer Status
+    packet[62] = 0x35; // Data Status (Valid, Primary, OK)
+    packet[63] = 0x00; // Transfer Status
 
-    pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 60);
+    pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 64);
 }
+
 
 int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeoutMs) {
     if (!m_pcapHandle) return -1;
@@ -584,90 +589,113 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
             const uint8_t *dest = data;
             const uint8_t *src = data + 6;
             uint16_t type = (data[12] << 8) | data[13];
+            int ethHeaderLen = 14;
+
+            // Handle VLAN tag (802.1Q)
+            if (type == 0x8100 && header->caplen >= 18) {
+                type = (data[16] << 8) | data[17];
+                ethHeaderLen = 18;
+            }
 
             // MATCH ALL PACKETS FROM TARGET FOR LOGGING
             if (memcmp(src, m_targetMacBytes, 6) == 0) {
-                if (type == 0x0806) { // ARP
-                    uint16_t op = (data[20] << 8 | data[21]);
+                if (type == 0x0806 && header->caplen >= ethHeaderLen + 28) { // ARP
+                    const uint8_t *arp = data + ethHeaderLen;
+                    uint16_t op = (arp[6] << 8 | arp[7]);
                     if (op == 1) { // Request
-                        if (header->caplen >= 42 && data[38] == 192 && data[39] == 168 && data[40] == 0 && data[41] == 254) {
-                            sendArpResponse(src, data + 28); 
+                        if (arp[24] == 192 && arp[25] == 168 && arp[26] == 0 && arp[27] == 254) {
+                            sendArpResponse(src, arp + 14); 
                         }
                     }
                 }
-                emit messageLogged(QString("  [Packet from Target] Dest: %1 Type: 0x%2")
-                    .arg(macToString(dest)).arg(type, 4, 16, QChar('0')));
+                // Avoid logging cyclic frames too often
+                static int packetCounter = 0;
+                if (type != 0x8892 || packetCounter++ % 100 == 0) {
+                    emit messageLogged(QString("  [Packet from Target] Dest: %1 Type: 0x%2")
+                        .arg(macToString(dest)).arg(type, 4, 16, QChar('0')));
+                }
             }
 
             // Match based on destination MAC being US
             if (memcmp(dest, m_sourceMac, 6) != 0) continue;
 
-            if (frameId == 0x0000 || frameId == 0x0001) { // Looking for RPC response
-                if (type == 0x0800 && header->caplen >= 44) { 
-                    if (data[23] == 0x11) { // UDP
-                        uint8_t pduType = data[43]; 
-                        if (pduType == 2) { // Response
-                            if (header->caplen >= 126) {
-                                uint32_t retVal = (uint32_t(data[122]) << 24) | (uint32_t(data[123]) << 16) | (uint32_t(data[124]) << 8) | uint32_t(data[125]);
-                                emit messageLogged(QString("  [RPC Response] Return Value: 0x%1").arg(retVal, 8, 16, QChar('0')));
-                                if (retVal == 0) return 0; 
-                                return (int)retVal; 
-                            }
-                        } else if (pduType == 3) {
-                            emit messageLogged("  [RPC Fault] DCE RPC Fault received.");
-                            return -4;
-                        }
-                    }
-                }
-            } else if (frameId == 0x0002) { // Looking for RPC Request (AppReady)
-                if (type == 0x0800 && header->caplen >= 112) {
-                    if (data[23] == 0x11) {
-                        uint8_t pduType = data[43];
-                        uint16_t opnum = (data[110] << 8) | data[111]; 
-                        if (pduType == 0 && opnum == 4) { 
-                        emit messageLogged("  [RPC Request] Control Request (AppReady) received.");
-                        uint8_t resp[256];
-                        memcpy(resp, data + 6, 6); 
-                        memcpy(resp + 6, data, 6);   
-                        resp[12] = 0x08; resp[13] = 0x00;
-                        memcpy(resp + 14, data + 14, 20); 
-                        resp[26] = data[30]; resp[27] = data[31]; resp[28] = data[32]; resp[29] = data[33];
-                        resp[30] = data[26]; resp[31] = data[27]; resp[32] = data[28]; resp[33] = data[29];
-                        resp[34] = data[36]; resp[35] = data[37]; resp[36] = data[34]; resp[37] = data[35];
-                        uint8_t *r_rpc = resp + 42;
-                        memcpy(r_rpc, data + 42, 80);
-                        r_rpc[1] = 2; // Response
-                        r_rpc[68] = 0; r_rpc[69] = 4;
-                        uint8_t *r_body = resp + 122;
-                        memset(r_body, 0, 32); 
-                        r_body[2] = 0x00; r_body[3] = 0x08; 
-                        
-                        uint16_t r_bodyLen = 80 + 8; 
-                        resp[38] = ((r_bodyLen + 8) >> 8); resp[39] = ((r_bodyLen + 8) & 0xFF); 
-                        uint16_t r_ipLen = r_bodyLen + 8 + 20;
-                        resp[16] = (r_ipLen >> 8); resp[17] = (r_ipLen & 0xFF);
-                        resp[24] = 0; resp[25] = 0;
-                        uint16_t r_cksum = calculateIpChecksum(resp + 14, 20);
-                        resp[24] = (r_cksum >> 8); resp[25] = (r_cksum & 0xFF);
-                        
-                        if (m_pcapHandle) {
-                            pcap_sendpacket((pcap_t*)m_pcapHandle, resp, 14 + r_ipLen);
-                        }
-                        return 0;
-                    }
-                }
-            }
-        } else if (frameId != 0xFEFD && type == 0x8892) { 
-                if (header->caplen >= 16) {
-                    uint16_t capturedFrameId = (data[14] << 8) | data[15];
-                    emit messageLogged(QString("  [PN Packet Captured] FrameID: 0x%1").arg(capturedFrameId, 4, 16, QChar('0')));
+            if (type == 0x8892 && frameId != 0xFEFD) { 
+                if (header->caplen >= ethHeaderLen + 2) {
+                    uint16_t capturedFrameId = (data[ethHeaderLen] << 8) | data[ethHeaderLen + 1];
                     if (capturedFrameId == frameId) return 0;
                     
-                    if (capturedFrameId == 0x8001 && header->caplen >= 18) { 
-                        uint8_t newVal = data[16];
+                    if (capturedFrameId == 0x8001 && header->caplen >= ethHeaderLen + 4) { 
+                        uint8_t newVal = data[ethHeaderLen + 2];
                         if (newVal != m_inputData) {
                             m_inputData = newVal;
                             emit inputDataReceived(m_inputData);
+                        }
+                    }
+                }
+            } else if (type == 0x0800) { // IP/RPC
+                if (frameId == 0x0000 || frameId == 0x0001) { // Looking for RPC response
+                    if (header->caplen >= ethHeaderLen + 30) { 
+                        const uint8_t *ip = data + ethHeaderLen;
+                        if (ip[9] == 0x11) { // UDP
+                            const uint8_t *rpc = ip + 28; 
+                            if (header->caplen >= ethHeaderLen + 20 + 8 + 80) { 
+                                uint8_t pduType = rpc[1]; 
+                                if (pduType == 2) { // Response
+                                    const uint8_t *body = rpc + 80;
+                                    uint32_t retVal = (uint32_t(body[0]) << 24) | (uint32_t(body[1]) << 16) | (uint32_t(body[2]) << 8) | uint32_t(body[3]);
+                                    emit messageLogged(QString("  [RPC Response] Return Value: 0x%1").arg(retVal, 8, 16, QChar('0')));
+                                    if (retVal == 0 || retVal < 0xFF) return (int)retVal; 
+                                } else if (pduType == 3) {
+                                    emit messageLogged("  [RPC Fault] DCE RPC Fault received.");
+                                    return -4;
+                                }
+                            }
+                        }
+                    }
+                } else if (frameId == 0x0002) { // Looking for RPC Request (AppReady)
+                    if (header->caplen >= ethHeaderLen + 20 + 8 + 80) {
+                        const uint8_t *ip = data + ethHeaderLen;
+                        if (ip[9] == 0x11) {
+                            const uint8_t *rpc = ip + 28;
+                            uint8_t pduType = rpc[1];
+                            uint16_t opnum = (rpc[68] << 8) | rpc[69]; 
+                            if (pduType == 0 && opnum == 4) { 
+                                emit messageLogged("  [RPC Request] Control Request (AppReady) received.");
+                                uint8_t resp[256];
+                                memset(resp, 0, sizeof(resp));
+                                memcpy(resp, src, 6);       // Dest
+                                memcpy(resp + 6, dest, 6);  // Source
+                                resp[12] = 0x08; resp[13] = 0x00; // Untagged for RPC response
+                                
+                                uint8_t *r_ip = resp + 14;
+                                memcpy(r_ip, ip, 20); 
+                                memcpy(r_ip + 12, ip + 16, 4);
+                                memcpy(r_ip + 16, ip + 12, 4);
+                                
+                                uint8_t *r_udp = resp + 34;
+                                memcpy(r_udp, ip + 20, 8); 
+                                memcpy(r_udp, ip + 22, 2);
+                                memcpy(r_udp + 2, ip + 20, 2);
+                                
+                                uint8_t *r_rpc = resp + 42;
+                                memcpy(r_rpc, rpc, 80);
+                                r_rpc[1] = 2; // Response
+                                
+                                uint8_t *r_body = resp + 122;
+                                memset(r_body, 0, 8); 
+                                
+                                uint16_t r_bodyLen = 80 + 8;
+                                r_udp[4] = ((r_bodyLen + 8) >> 8); r_udp[5] = ((r_bodyLen + 8) & 0xFF);
+                                r_ip[2] = ((r_bodyLen + 8 + 20) >> 8); r_ip[3] = ((r_bodyLen + 8 + 20) & 0xFF);
+                                r_ip[10] = 0; r_ip[11] = 0;
+                                uint16_t r_cksum = calculateIpChecksum(r_ip, 20);
+                                r_ip[10] = (r_cksum >> 8); r_ip[11] = (r_cksum & 0xFF);
+                                
+                                if (m_pcapHandle) {
+                                    pcap_sendpacket((pcap_t*)m_pcapHandle, resp, 14 + 20 + 8 + r_bodyLen);
+                                }
+                                return 0;
+                            }
                         }
                     }
                 }
@@ -680,6 +708,7 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
 }
 
 QString ArExchangeManager::macToString(const uint8_t *mac) {
+
     return QString("%1:%2:%3:%4:%5:%6")
         .arg(mac[0], 2, 16, QChar('0'))
         .arg(mac[1], 2, 16, QChar('0'))

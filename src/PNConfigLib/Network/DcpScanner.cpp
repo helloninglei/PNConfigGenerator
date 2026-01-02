@@ -244,18 +244,28 @@ QList<DiscoveredDevice> DcpScanner::scan() {
 }
 
 void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDevice> &devices) {
-    if (len < (int)(sizeof(EthernetHeader) + sizeof(DcpHeader))) return;
+    if (len < 14) return;
 
     EthernetHeader *eth = (EthernetHeader*)data;
     uint16_t type = qFromBigEndian<uint16_t>(eth->type);
+    int offset = sizeof(EthernetHeader);
+
+    // Handle VLAN tag
+    if (type == 0x8100 && len >= 18) {
+        type = (data[16] << 8) | data[17];
+        offset = 18;
+    }
+
+    if (len < offset + (int)sizeof(DcpHeader)) return;
     
-    DcpHeader *dcp = (DcpHeader*)(data + sizeof(EthernetHeader));
+    DcpHeader *dcp = (DcpHeader*)(data + offset);
     uint16_t frameId = qFromBigEndian<uint16_t>(dcp->frameId);
     
     // 0xFEFF is Identify Response
     if (frameId != 0xFEFF) {
         return;
     }
+
 
     // Some devices use ServiceType 0x01 (Success) instead of 0x02 (Response)
     if (dcp->serviceId != 0x05) {
@@ -275,8 +285,9 @@ void DcpScanner::parseDcpPacket(const uint8_t *data, int len, QList<DiscoveredDe
         }
     }
 
-    int offset = sizeof(EthernetHeader) + sizeof(DcpHeader);
+    offset += sizeof(DcpHeader);
     int dcpDataLen = qFromBigEndian<uint16_t>(dcp->dcpDataLength);
+
     int remaining = dcpDataLen;
 
     while (remaining >= 4) {
