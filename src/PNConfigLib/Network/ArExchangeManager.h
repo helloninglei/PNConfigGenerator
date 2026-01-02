@@ -32,9 +32,13 @@ public:
     ArState state() const { return m_state; }
     QString lastError() const { return m_lastError; }
 
+    void setOutputData(uint8_t val) { m_outputData = val; }
+    uint8_t inputData() const { return m_inputData; }
+
 signals:
     void stateChanged(ArState newState);
     void messageLogged(const QString &message);
+    void inputDataReceived(uint8_t value);
 
 private slots:
     void onPhaseTimerTick();
@@ -67,6 +71,8 @@ private:
     QString m_stationName;
     
     uint8_t m_sourceMac[6];
+    uint8_t m_inputData = 0;
+    uint8_t m_outputData = 0;
     uint8_t m_targetMacBytes[6];
     void* m_pcapHandle = nullptr;
     
@@ -74,6 +80,8 @@ private:
     QTimer *m_cyclicTimer;
     int m_phaseStep = 0;
     uint32_t m_lastXid = 0;
+    bool m_inPhaseTick = false;
+    bool m_isDestroying = false;
 };
 
 } // namespace PNConfigLib

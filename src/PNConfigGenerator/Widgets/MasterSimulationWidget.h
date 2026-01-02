@@ -67,6 +67,8 @@ private slots:
     void onStartCommunication();
     void onArStateChanged(PNConfigLib::ArState state);
     void onArLogMessage(const QString &msg);
+    void onInputDataReceived(uint8_t value);
+    void onOutputValueChanged(int value);
 
 private:
     void setupUi();
@@ -162,6 +164,9 @@ private:
     QTimer *flashTimer;
     int flashRemaining;
     bool flashState;
+    
+    QMap<int, QLabel*> m_inputLabels;
+    QMap<int, class QSpinBox*> m_outputSpinBoxes;
 };
 
 #include <QMetaType>

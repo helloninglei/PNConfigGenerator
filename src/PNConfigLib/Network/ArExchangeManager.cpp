@@ -18,6 +18,7 @@
 #pragma comment(lib, "iphlpapi.lib")
 #endif
 #include <pcap.h>
+#include <QPointer>
 
 namespace PNConfigLib {
 
@@ -30,6 +31,7 @@ ArExchangeManager::ArExchangeManager(QObject *parent) : QObject(parent) {
 }
 
 ArExchangeManager::~ArExchangeManager() {
+    m_isDestroying = true;
     stop();
 }
 
@@ -128,24 +130,34 @@ void ArExchangeManager::stop() {
     
     if (m_state != ArState::Offline) {
         setState(ArState::Offline);
-        emit messageLogged("IO Exchange stopped.");
+        if (!m_isDestroying) {
+            emit messageLogged("IO Exchange stopped.");
+        }
     }
 }
 
 void ArExchangeManager::setState(ArState newState) {
     if (m_state != newState) {
         m_state = newState;
-        emit stateChanged(m_state);
+        if (!m_isDestroying) {
+            emit stateChanged(m_state);
+        }
     }
 }
 
 void ArExchangeManager::onPhaseTimerTick() {
+    if (m_inPhaseTick) return;
+    m_inPhaseTick = true;
+
+    QPointer<ArExchangeManager> safeThis(this);
     m_phaseTimer->stop(); // Stop while processing to prevent overlaps
+    
     switch (m_state) {
         case ArState::Connecting:
             if (sendRpcConnect()) {
                 emit messageLogged("Phase 1: Connect request sent. Waiting for response...");
-                int res = waitForResponse(0x0000); // 0x0000 for generic RPC/UDP response matching for now
+                int res = waitForResponse(0x0000); 
+                if (!safeThis) return;
                 if (res >= 0) {
                     emit messageLogged("Phase 1: Connect response received.");
                     setState(ArState::Parameterizing);
@@ -155,6 +167,7 @@ void ArExchangeManager::onPhaseTimerTick() {
                     stop();
                 }
             } else {
+                if (!safeThis) return;
                 emit messageLogged("Phase 1: Failed to send Connect.");
                 stop();
             }
@@ -163,17 +176,19 @@ void ArExchangeManager::onPhaseTimerTick() {
         case ArState::Parameterizing:
             if (sendRpcControlParamEnd()) {
                 emit messageLogged("Phase 2: ParamEnd sent. Waiting for response...");
-                int res = waitForResponse(0x0001); // Special code to match RPC Control response
+                int res = waitForResponse(0x0001); 
+                if (!safeThis) return;
                 if (res == 0) {
                     emit messageLogged("Phase 2: ParamEnd accepted by Slave.");
                     setState(ArState::AppReady);
-                    startCyclicExchange(); // Start output data exchange immediately
+                    startCyclicExchange(); 
                     m_phaseTimer->start(100);
                 } else {
                     emit messageLogged(QString("Phase 2: ParamEnd rejected (Result: 0x%1).").arg(res, 8, 16, QChar('0')));
                     stop();
                 }
             } else {
+                if (!safeThis) return;
                 emit messageLogged("Phase 2: Failed to send ParamEnd.");
                 stop();
             }
@@ -181,24 +196,30 @@ void ArExchangeManager::onPhaseTimerTick() {
 
         case ArState::AppReady:
             emit messageLogged("Phase 3: Waiting for ApplicationReady from Slave...");
-            if (waitForResponse(0x0002) == 0) { // Special code to match CControl/AppReady request
-                emit messageLogged("Phase 3: ApplicationReady received. AR established.");
-                setState(ArState::Running);
-                // Cyclic exchange already started in Phase 2
-            } else {
-                emit messageLogged("Phase 3: ApplicationReady timeout.");
-                stop();
+            {
+                int res = waitForResponse(0x0002, 0, 5000);
+                if (!safeThis) return;
+                if (res == 0) {
+                    emit messageLogged("Phase 3: ApplicationReady received. AR established.");
+                    setState(ArState::Running);
+                    m_phaseTimer->start(100); 
+                } else {
+                    emit messageLogged("Phase 3: ApplicationReady timeout.");
+                    stop();
+                }
             }
             break;
             
         case ArState::Running:
-            m_phaseTimer->stop();
+            waitForResponse(0x8001, 0, 1); 
+            if (!safeThis) return;
+            m_phaseTimer->start(10); 
             break;
             
         default:
-            m_phaseTimer->stop();
             break;
     }
+    if (safeThis) m_inPhaseTick = false;
 }
 
 bool ArExchangeManager::sendRpcConnect() {
@@ -365,8 +386,7 @@ bool ArExchangeManager::sendRpcConnect() {
     body[b5LenPos] = (b5Len >> 8); body[b5LenPos+1] = (b5Len & 0xFF);
 
     // Finalize NDR
-    uint32_t totalBody = (uint32_t)offset;
-    uint32_t totalBlocks = (uint32_t)(offset - blocksStart); // args_length should be blocks only
+    uint32_t totalBlocks = (uint32_t)(offset - blocksStart);
     
     // args_length (Position 4-7)
     body[ndrLenPos] = 0; body[ndrLenPos+1] = 0;
@@ -389,6 +409,7 @@ bool ArExchangeManager::sendRpcConnect() {
     uint16_t cksum = calculateIpChecksum(packet + 14, 20);
     packet[24] = (cksum >> 8); packet[25] = (cksum & 0xFF);
 
+    if (!m_pcapHandle) return false;
     return pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 14 + ipLen) == 0;
 }
 
@@ -409,6 +430,7 @@ bool ArExchangeManager::sendRecordData() {
     packet[28] = 0x00; packet[29] = 0x04;
     packet[32] = 0x01; // Flash
     
+    if (!m_pcapHandle) return false;
     if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 60) != 0) return false;
     return true;
 }
@@ -489,6 +511,7 @@ bool ArExchangeManager::sendRpcControlParamEnd() {
     uint16_t cksum = calculateIpChecksum(packet + 14, 20);
     packet[24] = (cksum >> 8); packet[25] = (cksum & 0xFF);
 
+    if (!m_pcapHandle) return false;
     return pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 14 + ipLen) == 0;
 }
 
@@ -522,7 +545,7 @@ void ArExchangeManager::sendCyclicFrame() {
     packet[14] = 0x80; packet[15] = 0x02;
 
     // IO Data Object 1 (1 byte data + 1 byte IOPS)
-    packet[16] = 0x00; // Data
+    packet[16] = m_outputData; // Data from UI
     packet[17] = 0x80; // IOPS Good
     
     // IOCS for Slave Input (1 byte)
@@ -548,12 +571,13 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
     QElapsedTimer timer;
     timer.start();
 
-    // Mapping for FrameIDs:
-    // 0xFEFD: DCP Get/Set
-    // 0x0000: Generic RPC (matching by IP/Port in sendRpcConnect)
-
+    QPointer<ArExchangeManager> safeThis(this);
     while (timer.elapsed() < timeoutMs) {
+        if (!m_pcapHandle) return -1;
         int res = pcap_next_ex((pcap_t*)m_pcapHandle, &header, &data);
+        if (!safeThis) return -1;
+        if (!m_pcapHandle) return -1;
+
         if (res == 1) {
             if (header->caplen < 14) continue;
 
@@ -566,9 +590,8 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
                 if (type == 0x0806) { // ARP
                     uint16_t op = (data[20] << 8 | data[21]);
                     if (op == 1) { // Request
-                        // Target IP is at offset 38. Checking for 192.168.0.254
                         if (header->caplen >= 42 && data[38] == 192 && data[39] == 168 && data[40] == 0 && data[41] == 254) {
-                            sendArpResponse(src, data + 28); // Requestor's IP is at 28
+                            sendArpResponse(src, data + 28); 
                         }
                     }
                 }
@@ -580,16 +603,15 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
             if (memcmp(dest, m_sourceMac, 6) != 0) continue;
 
             if (frameId == 0x0000 || frameId == 0x0001) { // Looking for RPC response
-                if (type == 0x0800) { // IPv4
+                if (type == 0x0800 && header->caplen >= 44) { 
                     if (data[23] == 0x11) { // UDP
-            if (header->caplen < 44) continue;
-            uint8_t pduType = data[43]; // Offset 42+1 (PDU Type)
+                        uint8_t pduType = data[43]; 
                         if (pduType == 2) { // Response
                             if (header->caplen >= 126) {
                                 uint32_t retVal = (uint32_t(data[122]) << 24) | (uint32_t(data[123]) << 16) | (uint32_t(data[124]) << 8) | uint32_t(data[125]);
                                 emit messageLogged(QString("  [RPC Response] Return Value: 0x%1").arg(retVal, 8, 16, QChar('0')));
-                                if (retVal == 0) return 0; // Success
-                                return (int)retVal; // Return error code
+                                if (retVal == 0) return 0; 
+                                return (int)retVal; 
                             }
                         } else if (pduType == 3) {
                             emit messageLogged("  [RPC Fault] DCE RPC Fault received.");
@@ -598,52 +620,61 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
                     }
                 }
             } else if (frameId == 0x0002) { // Looking for RPC Request (AppReady)
-                if (type == 0x0800 && data[23] == 0x11) {
-                    uint8_t pduType = data[43];
-                    if (header->caplen >= 112) {
+                if (type == 0x0800 && header->caplen >= 112) {
+                    if (data[23] == 0x11) {
+                        uint8_t pduType = data[43];
                         uint16_t opnum = (data[110] << 8) | data[111]; 
-                        if (pduType == 0 && opnum == 4) { // Request, opnum Control (4)
+                        if (pduType == 0 && opnum == 4) { 
                         emit messageLogged("  [RPC Request] Control Request (AppReady) received.");
-                        // Send Control Response Pos
                         uint8_t resp[256];
-                        memcpy(resp, data + 6, 6); // Dest = Original Src
-                        memcpy(resp + 6, data, 6);   // Src = Original Dest
+                        memcpy(resp, data + 6, 6); 
+                        memcpy(resp + 6, data, 6);   
                         resp[12] = 0x08; resp[13] = 0x00;
-                        memcpy(resp + 14, data + 14, 20); // Copy IP header template
+                        memcpy(resp + 14, data + 14, 20); 
                         resp[26] = data[30]; resp[27] = data[31]; resp[28] = data[32]; resp[29] = data[33];
                         resp[30] = data[26]; resp[31] = data[27]; resp[32] = data[28]; resp[33] = data[29];
                         resp[34] = data[36]; resp[35] = data[37]; resp[36] = data[34]; resp[37] = data[35];
                         uint8_t *r_rpc = resp + 42;
                         memcpy(r_rpc, data + 42, 80);
                         r_rpc[1] = 2; // Response
-                        r_rpc[68] = 0; r_rpc[69] = 4; // Set Opnum 4 in response too
+                        r_rpc[68] = 0; r_rpc[69] = 4;
                         uint8_t *r_body = resp + 122;
                         memset(r_body, 0, 32); 
-                        r_body[2] = 0x00; r_body[3] = 0x08; // NDR Len 8
+                        r_body[2] = 0x00; r_body[3] = 0x08; 
                         
-                        // Recalculate Body Len in RPC and IP Header
-                        uint16_t r_bodyLen = 80 + 8; // RPC Header + Body
-                        resp[38] = ((r_bodyLen + 8) >> 8); resp[39] = ((r_bodyLen + 8) & 0xFF); // UDP Len
+                        uint16_t r_bodyLen = 80 + 8; 
+                        resp[38] = ((r_bodyLen + 8) >> 8); resp[39] = ((r_bodyLen + 8) & 0xFF); 
                         uint16_t r_ipLen = r_bodyLen + 8 + 20;
                         resp[16] = (r_ipLen >> 8); resp[17] = (r_ipLen & 0xFF);
                         resp[24] = 0; resp[25] = 0;
                         uint16_t r_cksum = calculateIpChecksum(resp + 14, 20);
                         resp[24] = (r_cksum >> 8); resp[25] = (r_cksum & 0xFF);
                         
-                        pcap_sendpacket((pcap_t*)m_pcapHandle, resp, 14 + r_ipLen);
+                        if (m_pcapHandle) {
+                            pcap_sendpacket((pcap_t*)m_pcapHandle, resp, 14 + r_ipLen);
+                        }
                         return 0;
                     }
                 }
             }
-        } else if (frameId != 0xFEFD && type == 0x8892) { // PROFINET (not DCP matching branch)
+        } else if (frameId != 0xFEFD && type == 0x8892) { 
                 if (header->caplen >= 16) {
                     uint16_t capturedFrameId = (data[14] << 8) | data[15];
                     emit messageLogged(QString("  [PN Packet Captured] FrameID: 0x%1").arg(capturedFrameId, 4, 16, QChar('0')));
                     if (capturedFrameId == frameId) return 0;
+                    
+                    if (capturedFrameId == 0x8001 && header->caplen >= 18) { 
+                        uint8_t newVal = data[16];
+                        if (newVal != m_inputData) {
+                            m_inputData = newVal;
+                            emit inputDataReceived(m_inputData);
+                        }
+                    }
                 }
             }
         }
         QCoreApplication::processEvents();
+        if (!safeThis) return -1;
     }
     return -2; // Timeout
 }

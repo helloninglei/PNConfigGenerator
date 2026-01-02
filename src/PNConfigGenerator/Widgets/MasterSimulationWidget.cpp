@@ -12,6 +12,7 @@
 #include <QLineEdit>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QSpinBox>
 #include <QGroupBox>
 #include <QPushButton>
 #include <QFormLayout>
@@ -763,6 +764,9 @@ void MasterSimulationWidget::showModuleConfig(int slotIndex)
         delete item;
     }
 
+    m_inputLabels.clear();
+    m_outputSpinBoxes.clear();
+
     if (!m_assignedModules.contains(slotIndex)) {
         configLayout->addWidget(new QLabel("Slot(" + QString::number(slotIndex) + ") - 未插入模块"));
         return;
@@ -810,21 +814,36 @@ void MasterSimulationWidget::showModuleConfig(int slotIndex)
         titleLabel->setStyleSheet("font-weight: bold;");
         configLayout->addWidget(titleLabel);
 
-        QTableWidget* table = new QTableWidget(0, 2, this);
-        table->setHorizontalHeaderLabels({"名称", "类型"});
+        QTableWidget* table = new QTableWidget(0, 3, this); // 3 columns now
+        table->setHorizontalHeaderLabels({"名称", "类型", "值"});
         table->horizontalHeader()->setStretchLastSection(true);
         table->verticalHeader()->setVisible(false);
-        table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        // table->setEditTriggers(QAbstractItemView::NoEditTriggers); // Removed to allow interaction? No, we use widgets
         table->setSelectionBehavior(QAbstractItemView::SelectRows);
-        table->setMaximumHeight(100);
+        table->setMinimumHeight(80);
         table->setStyleSheet("background: white; border: 1px solid #ccc;");
         
+
         for (const auto& sub : mod.submodules) {
             if ((isInput && sub.inputDataLength > 0) || (!isInput && sub.outputDataLength > 0)) {
                 int row = table->rowCount();
                 table->insertRow(row);
                 table->setItem(row, 0, new QTableWidgetItem(sub.name));
-                table->setItem(row, 1, new QTableWidgetItem("Unsigned8")); // Static for demo
+                table->setItem(row, 1, new QTableWidgetItem("Unsigned8")); 
+                
+                if (isInput) {
+                    QLabel* valLabel = new QLabel("0x00 (0)", this);
+                    valLabel->setAlignment(Qt::AlignCenter);
+                    table->setCellWidget(row, 2, valLabel);
+                    m_inputLabels[row] = valLabel; // Simple mapping
+                } else {
+                    QSpinBox* spin = new QSpinBox(this);
+                    spin->setRange(0, 255);
+                    spin->setValue(m_arManager->inputData()); // Or last set output
+                    table->setCellWidget(row, 2, spin);
+                    m_outputSpinBoxes[row] = spin;
+                    connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &MasterSimulationWidget::onOutputValueChanged);
+                }
             }
         }
 
@@ -834,7 +853,21 @@ void MasterSimulationWidget::showModuleConfig(int slotIndex)
     addIOTable("输入", true);
     addIOTable("输出", false);
 
+    // Connect IO signals
+    disconnect(m_arManager, &PNConfigLib::ArExchangeManager::inputDataReceived, this, &MasterSimulationWidget::onInputDataReceived);
+    connect(m_arManager, &PNConfigLib::ArExchangeManager::inputDataReceived, this, &MasterSimulationWidget::onInputDataReceived);
+
     configLayout->addStretch();
+}
+
+void MasterSimulationWidget::onInputDataReceived(uint8_t value) {
+    if (m_inputLabels.contains(0) && m_inputLabels[0]) { // Added nullptr check
+        m_inputLabels[0]->setText(QString("0x%1 (%2)").arg(value, 2, 16, QChar('0')).arg(value));
+    }
+}
+
+void MasterSimulationWidget::onOutputValueChanged(int value) {
+    m_arManager->setOutputData((uint8_t)value);
 }
 
 void MasterSimulationWidget::displayDeviceSlots(const PNConfigLib::GsdmlInfo &info)

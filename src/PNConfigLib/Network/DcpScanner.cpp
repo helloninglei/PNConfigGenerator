@@ -1,4 +1,5 @@
 #include <QtEndian>
+#include <QPointer>
 #include <cstring>
 #include <QStringList>
 #include <QDebug>
@@ -217,9 +218,13 @@ QList<DiscoveredDevice> DcpScanner::scan() {
     timer.start();
     
     int capturedCount = 0;
+    QPointer<DcpScanner> safeThis(this);
     // Capture for 5 seconds (to allow for ResponseDelay)
     while (timer.elapsed() < 5000) {
+        if (!m_pcapHandle) break;
         res = pcap_next_ex(m_pcapHandle, &header, &data);
+        if (!safeThis) return devices;
+        if (!m_pcapHandle) break;
         if (res == 1) {
             capturedCount++;
             parseDcpPacket(data, header->caplen, devices);
@@ -231,6 +236,7 @@ QList<DiscoveredDevice> DcpScanner::scan() {
         }
         
         QCoreApplication::processEvents(); 
+        if (!safeThis) return devices;
     }
 
     qDebug() << "Scan completed. Received" << capturedCount << "PROFINET packets. Total unique devices found:" << devices.size();
@@ -611,8 +617,12 @@ int DcpScanner::waitForSetResponse(uint32_t xid, int timeoutMs) {
 
     qDebug() << "Waiting for DCP Response (XID:" << QString("0x%1").arg(xid, 8, 16, QChar('0')) << ") for" << timeoutMs << "ms...";
 
+    QPointer<DcpScanner> safeThis(this);
     while (timer.elapsed() < timeoutMs) {
+        if (!m_pcapHandle) return -1;
         int res = pcap_next_ex(m_pcapHandle, &header, &data);
+        if (!safeThis) return -1;
+        if (!m_pcapHandle) return -1;
         if (res == 1) {
             if (header->caplen < sizeof(EthernetHeader) + sizeof(DcpHeader)) continue;
 
@@ -662,6 +672,7 @@ int DcpScanner::waitForSetResponse(uint32_t xid, int timeoutMs) {
             }
         }
         QCoreApplication::processEvents();
+        if (!safeThis) return -1;
     }
     qDebug() << "DCP Response timeout for XID:" << QString("0x%1").arg(xid, 8, 16, QChar('0'));
     return -2; // Timeout
