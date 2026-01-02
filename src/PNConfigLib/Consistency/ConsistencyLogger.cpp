@@ -4,6 +4,8 @@
 
 #include "ConsistencyLogger.h"
 
+#include <QDebug>
+
 namespace PNConfigLib {
 
 QList<ConsistencyLog> ConsistencyLogger::s_logs;
@@ -16,7 +18,17 @@ void ConsistencyLogger::reset()
 void ConsistencyLogger::log(ConsistencyType type, LogSeverity severity, const QString& source, const QString& message)
 {
     s_logs.append(ConsistencyLog(type, severity, source, message));
+    
+    // Log to qDebug for file redirection
+    QString sev;
+    switch(severity) {
+        case LogSeverity::Info: sev = "INFO"; break;
+        case LogSeverity::Warning: sev = "WARN"; break;
+        case LogSeverity::Error: sev = "ERROR"; break;
+    }
+    qDebug() << QString("[CONSISTENCY %1] %2: %3").arg(sev, source, message);
 }
+
 
 QList<ConsistencyLog>& ConsistencyLogger::logs()
 {

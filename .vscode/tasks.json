@@ -95,12 +95,10 @@
         {
             "label": "clean_controller",
             "type": "shell",
-            "command": "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe",
+            "command": "powershell",
             "args": [
-                "${workspaceFolder}/example/pn_driver/src/examples/ioc/test_app/win32/test_app.sln",
-                "/t:Clean",
-                "/p:Configuration=Release",
-                "/p:Platform=Win32"
+                "-Command",
+                "if (Test-Path '${workspaceFolder}/build') { Remove-Item -Path '${workspaceFolder}/build/*' -Recurse -Force -ErrorAction SilentlyContinue; Write-Host 'Build directory cleaned successfully' } else { Write-Host 'Build directory does not exist' }"
             ],
             "group": "build",
             "presentation": {
@@ -109,7 +107,7 @@
                 "focus": false,
                 "panel": "shared"
             },
-            "problemMatcher": "$msCompile"
+            "problemMatcher": []
         },
         {
             "label": "build-controller",
