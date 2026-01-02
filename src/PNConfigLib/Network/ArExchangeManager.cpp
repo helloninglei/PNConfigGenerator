@@ -181,7 +181,7 @@ void ArExchangeManager::onPhaseTimerTick() {
                 if (res == 0) {
                     emit messageLogged("Phase 2: ParamEnd accepted by Slave.");
                     setState(ArState::AppReady);
-                    startCyclicExchange(); 
+                    // DO NOT start cyclic exchange here - wait for ApplicationReady first
                     m_phaseTimer->start(100);
                 } else {
                     emit messageLogged(QString("Phase 2: ParamEnd rejected (Result: 0x%1).").arg(res, 8, 16, QChar('0')));
@@ -201,6 +201,8 @@ void ArExchangeManager::onPhaseTimerTick() {
                 if (!safeThis) return;
                 if (res == 0) {
                     emit messageLogged("Phase 3: ApplicationReady received. AR established.");
+                    // NOW start cyclic exchange after ApplicationReady is confirmed
+                    startCyclicExchange();
                     setState(ArState::Running);
                     m_phaseTimer->start(100); 
                 } else {
@@ -485,13 +487,17 @@ bool ArExchangeManager::sendRpcControlParamEnd() {
 
     int blocksStart = offset;
 
-    // Block: ControlRequest (Type 0x0110)
-    body[offset++] = 0x01; body[offset++] = 0x10; // ParamEnd
-    body[offset++] = 0x00; body[offset++] = 0x1A; // Length 26
+    // Block: ControlRequest (Type 0x0110 - ParamEnd)
+    body[offset++] = 0x01; body[offset++] = 0x10; // Type
+    body[offset++] = 0x00; body[offset++] = 0x1C; // Length 28 (Total 32 - 4)
     body[offset++] = 0x01; body[offset++] = 0x00; // Version
-    body[offset++] = 0x00; body[offset++] = 0x00; // Padding
+    
+    // Reserved (2 bytes)
+    body[offset++] = 0x00; body[offset++] = 0x00;
+    
     static const uint8_t arUuid[] = { 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
     memcpy(body + offset, arUuid, 16); offset += 16;
+    
     body[offset++] = 0x00; body[offset++] = 0x01; // Session Key
     body[offset++] = 0x00; body[offset++] = 0x00; // Alarm Seq
     body[offset++] = 0x00; body[offset++] = 0x01; // Command: ParamEnd
@@ -552,17 +558,17 @@ void ArExchangeManager::sendCyclicFrame() {
     // IOCS for Slave Input (1 byte)
     packet[22] = 0x80; // IOCS Good
 
-    // Footer (APDU Status) - Positioned immediately after IO data (Offset 20 + 3 = 23)
-    // PROFINET ticks are 31.25us. 8ms cycle = 256 ticks.
+    // Moving APDU Status to the end of the 64-byte frame (Offset 60)
+    // p-net and other stacks typically look at the end of the frame if it is padded to 64 bytes.
     static uint16_t cycleCounter = 0;
-    packet[23] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
-    packet[24] = cycleCounter & 0xFF;        // CycleCounter Low
+    packet[60] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
+    packet[61] = cycleCounter & 0xFF;        // CycleCounter Low
     cycleCounter += 256;
 
-    packet[25] = 0x35; // Data Status (Valid, Run, NoProblem, Primary)
-    packet[26] = 0x00; // Transfer Status
+    packet[62] = 0x35; // Data Status (Valid, Run, NoProblem, Primary)
+    packet[63] = 0x00; // Transfer Status
 
-    // Send 64-byte frame (padded with zeros)
+    // Send full 64-byte frame
     pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 64);
 }
 
@@ -677,38 +683,109 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
                             uint16_t opnum = (rpc[68] << 8) | rpc[69]; 
                             if (pduType == 0 && opnum == 4) { 
                                 emit messageLogged("  [RPC Request] Control Request (AppReady) received.");
-                                uint8_t resp[256];
+                                
+                                // Build complete PROFINET CControl response
+                                uint8_t resp[512];
                                 memset(resp, 0, sizeof(resp));
+                                
+                                // Ethernet Header
                                 memcpy(resp, src, 6);       // Dest
                                 memcpy(resp + 6, dest, 6);  // Source
                                 resp[12] = 0x08; resp[13] = 0x00; // Untagged for RPC response
                                 
+                                // IP Header
                                 uint8_t *r_ip = resp + 14;
                                 memcpy(r_ip, ip, 20); 
-                                memcpy(r_ip + 12, ip + 16, 4);
+                                memcpy(r_ip + 12, ip + 16, 4);  // Swap IPs
                                 memcpy(r_ip + 16, ip + 12, 4);
                                 
+                                // UDP Header - swap ports
                                 uint8_t *r_udp = resp + 34;
-                                // Swap source and destination ports
                                 memcpy(r_udp, ip + 22, 2);     // Source port = original dest port
                                 memcpy(r_udp + 2, ip + 20, 2); // Dest port = original source port
                                 
+                                // RPC Header
                                 uint8_t *r_rpc = resp + 42;
                                 memcpy(r_rpc, rpc, 80);
                                 r_rpc[1] = 2; // Response
                                 
+                                // RPC Body - PROFINET Block Structure
                                 uint8_t *r_body = resp + 122;
-                                memset(r_body, 0, 8); 
+                                int bodyPos = 0;
                                 
-                                uint16_t r_bodyLen = 80 + 8;
-                                r_udp[4] = ((r_bodyLen + 8) >> 8); r_udp[5] = ((r_bodyLen + 8) & 0xFF);
-                                r_ip[2] = ((r_bodyLen + 8 + 20) >> 8); r_ip[3] = ((r_bodyLen + 8 + 20) & 0xFF);
+                                // PNIOStatus (4 bytes) - Success (0x00000000)
+                                // p-net reads this as the first field of pf_ndr_data_t (args_maximum)
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+
+                                // NDR Header - remaining 4 fields (16 bytes)
+                                // args_length (4 bytes)
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x20; // 32 bytes of block data
+                                // maximum_count (4 bytes)
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x20;
+                                // offset (4 bytes)
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+                                // actual_count (4 bytes)
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x20;
+                                
+                                // Block Header (6 bytes) - PF_BT_APPRDY_RES (0x8112)
+                                r_body[bodyPos++] = 0x81; r_body[bodyPos++] = 0x12;  // BlockType (0x8112)
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x1C;  // BlockLength (28 bytes)
+                                r_body[bodyPos++] = 0x01; r_body[bodyPos++] = 0x00;  // BlockVersionHigh (1), BlockVersionLow (0)
+                                
+                                // Control Block Data (26 bytes)
+                                // Reserved (2 bytes)
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+                                
+                                // AR UUID (16 bytes) - copy from request
+                                // Request structure: RPC(80) + Status(4) + NDR(20) + BlockHeader(6) + Reserved(2) + UUID(16)
+                                if (header->caplen >= ethHeaderLen + 20 + 8 + 80 + 4 + 20 + 6 + 2 + 16) {
+                                    memcpy(r_body + bodyPos, rpc + 80 + 4 + 20 + 6 + 2, 16);
+                                } else {
+                                    memset(r_body + bodyPos, 0, 16);
+                                }
+                                bodyPos += 16;
+                                
+                                // Session Key (2 bytes)
+                                if (header->caplen >= ethHeaderLen + 20 + 8 + 80 + 4 + 20 + 6 + 2 + 16 + 2) {
+                                    memcpy(r_body + bodyPos, rpc + 80 + 4 + 20 + 6 + 2 + 16, 2);
+                                } else {
+                                    r_body[bodyPos] = 0x00; r_body[bodyPos+1] = 0x01;
+                                }
+                                bodyPos += 2;
+                                
+                                // Alarm Sequence Number (2 bytes)
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+                                
+                                // Control Command (2 bytes) - BIT(PF_CONTROL_COMMAND_BIT_DONE) = 0x0008
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x08;
+                                
+                                // Control Block Properties (2 bytes)
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+                                
+                                // Calculate final lengths
+                                uint16_t fragLen = 80 + bodyPos;  // RPC header (80) + body
+                                r_rpc[74] = (fragLen >> 8); r_rpc[75] = (fragLen & 0xFF);
+                                
+                                uint16_t udpLen = 8 + fragLen;
+                                r_udp[4] = (udpLen >> 8); r_udp[5] = (udpLen & 0xFF);
+                                
+                                uint16_t ipLen = 20 + udpLen;
+                                r_ip[2] = (ipLen >> 8); r_ip[3] = (ipLen & 0xFF);
                                 r_ip[10] = 0; r_ip[11] = 0;
                                 uint16_t r_cksum = calculateIpChecksum(r_ip, 20);
                                 r_ip[10] = (r_cksum >> 8); r_ip[11] = (r_cksum & 0xFF);
                                 
+                                int totalLen = 14 + 20 + udpLen;
+                                emit messageLogged(QString("  [Sending CControl Response] Total: %1 bytes, RPC Body: %2 bytes")
+                                    .arg(totalLen).arg(bodyPos));
+                                    
                                 if (m_pcapHandle) {
-                                    pcap_sendpacket((pcap_t*)m_pcapHandle, resp, 14 + 20 + 8 + r_bodyLen);
+                                    pcap_sendpacket((pcap_t*)m_pcapHandle, resp, totalLen);
                                 }
                                 return 0;
                             }
@@ -743,30 +820,27 @@ bool ArExchangeManager::sendArpResponse(const uint8_t* targetMac, const uint8_t*
     memcpy(packet, targetMac, 6);       // Dest MAC
     memcpy(packet + 6, m_sourceMac, 6); // Source MAC
     
-    // VLAN Tag (802.1Q) - Priority 6
-    packet[12] = 0x81; packet[13] = 0x00;
-    packet[14] = 0xC0; packet[15] = 0x00;
-
-    // ARP type
-    packet[16] = 0x08; packet[17] = 0x06;
+    // NO VLAN Tag for ARP - ARP is usually untagged in PROFINET networks
+    // EtherType 0x0806
+    packet[12] = 0x08; packet[13] = 0x06;
 
     // ARP Header
-    packet[18] = 0x00; packet[19] = 0x01; // Hardware: Ethernet
-    packet[20] = 0x08; packet[21] = 0x00; // Protocol: IPv4
-    packet[22] = 0x06;                    // Hardware Size
-    packet[23] = 0x04;                    // Protocol Size
-    packet[24] = 0x00; packet[25] = 0x02; // Opcode: Reply
+    packet[14] = 0x00; packet[15] = 0x01; // Hardware: Ethernet
+    packet[16] = 0x08; packet[17] = 0x00; // Protocol: IPv4
+    packet[18] = 0x06;                    // Hardware Size
+    packet[19] = 0x04;                    // Protocol Size
+    packet[20] = 0x00; packet[21] = 0x02; // Opcode: Reply
 
     // Sender MAC/IP (Master)
-    memcpy(packet + 26, m_sourceMac, 6);
-    packet[32] = 192; packet[33] = 168; packet[34] = 0; packet[35] = 254;
+    memcpy(packet + 22, m_sourceMac, 6);
+    packet[28] = 192; packet[29] = 168; packet[30] = 0; packet[31] = 254;
 
     // Target MAC/IP (Slave)
-    memcpy(packet + 36, targetMac, 6);
-    memcpy(packet + 42, targetIp, 4);
+    memcpy(packet + 32, targetMac, 6);
+    memcpy(packet + 38, targetIp, 4);
 
     if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 64) != 0) return false;
-    emit messageLogged(QString("  [ARP Reply Out] To Slave for 192.168.0.254 (VLAN Tagged)"));
+    emit messageLogged(QString("  [ARP Reply Out] To Slave for 192.168.0.254 (Untagged)"));
     return true;
 }
 
