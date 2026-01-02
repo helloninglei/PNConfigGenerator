@@ -522,10 +522,7 @@ uint16_t ArExchangeManager::calculateIpChecksum(const uint8_t* ipHeader, int len
     return ~((uint16_t)sum);
 }
 
-void ArExchangeManager::startCyclicExchange() {
-    emit messageLogged("Phase 3: Starting Cyclic Data Exchange (Ethertype 0x8892)");
-    m_cyclicTimer->start(10); // 10ms for more continuous interaction
-}
+
 
 void ArExchangeManager::sendCyclicFrame() {
     if (!m_pcapHandle) return;
@@ -555,20 +552,30 @@ void ArExchangeManager::sendCyclicFrame() {
     // IOCS for Slave Input (1 byte)
     packet[22] = 0x80; // IOCS Good
 
-    // Footer (Positioned at the end of the 64-byte Ethernet packet)
+    // Footer (APDU Status) - Positioned immediately after IO data (Offset 20 + 3 = 23)
+    // PROFINET ticks are 31.25us. 8ms cycle = 256 ticks.
     static uint16_t cycleCounter = 0;
-    packet[60] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
-    packet[61] = cycleCounter & 0xFF;        // CycleCounter Low
-    cycleCounter += 32;
+    packet[23] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
+    packet[24] = cycleCounter & 0xFF;        // CycleCounter Low
+    cycleCounter += 256;
 
-    packet[62] = 0x35; // Data Status (Valid, Primary, OK)
-    packet[63] = 0x00; // Transfer Status
+    packet[25] = 0x35; // Data Status (Valid, Run, NoProblem, Primary)
+    packet[26] = 0x00; // Transfer Status
 
+    // Send 64-byte frame (padded with zeros)
     pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 64);
 }
 
+void ArExchangeManager::startCyclicExchange() {
+
+    if (m_cyclicTimer->isActive()) return;
+    
+    // Start periodic timer at 8ms (matching Clock 16 / RR 16)
+    m_cyclicTimer->start(8);
+}
 
 int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeoutMs) {
+
     if (!m_pcapHandle) return -1;
 
     struct pcap_pkthdr *header;
@@ -630,8 +637,17 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
                             m_inputData = newVal;
                             emit inputDataReceived(m_inputData);
                         }
+                        
+                        // Log DataStatus and other info occasionally
+                        static int logCounterIO = 0;
+                        if (logCounterIO++ % 100 == 0) {
+                             uint8_t ds = (header->caplen >= ethHeaderLen + 5 + 1) ? data[ethHeaderLen + 5] : 0;
+                             emit messageLogged(QString("  [PN Packet Captured] FrameID: 0x8001 Input: 0x%1 DS: 0x%2")
+                                .arg(newVal, 2, 16, QChar('0')).arg(ds, 2, 16, QChar('0')));
+                        }
                     }
                 }
+
             } else if (type == 0x0800) { // IP/RPC
                 if (frameId == 0x0000 || frameId == 0x0001) { // Looking for RPC response
                     if (header->caplen >= ethHeaderLen + 30) { 
@@ -673,9 +689,9 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
                                 memcpy(r_ip + 16, ip + 12, 4);
                                 
                                 uint8_t *r_udp = resp + 34;
-                                memcpy(r_udp, ip + 20, 8); 
-                                memcpy(r_udp, ip + 22, 2);
-                                memcpy(r_udp + 2, ip + 20, 2);
+                                // Swap source and destination ports
+                                memcpy(r_udp, ip + 22, 2);     // Source port = original dest port
+                                memcpy(r_udp + 2, ip + 20, 2); // Dest port = original source port
                                 
                                 uint8_t *r_rpc = resp + 42;
                                 memcpy(r_rpc, rpc, 80);
@@ -720,32 +736,39 @@ QString ArExchangeManager::macToString(const uint8_t *mac) {
 
 bool ArExchangeManager::sendArpResponse(const uint8_t* targetMac, const uint8_t* targetIp) {
     if (!m_pcapHandle) return false;
-    uint8_t packet[42];
+    uint8_t packet[64];
     memset(packet, 0, sizeof(packet));
 
     // Ethernet Header
     memcpy(packet, targetMac, 6);       // Dest MAC
     memcpy(packet + 6, m_sourceMac, 6); // Source MAC
-    packet[12] = 0x08; packet[13] = 0x06; // ARP type
+    
+    // VLAN Tag (802.1Q) - Priority 6
+    packet[12] = 0x81; packet[13] = 0x00;
+    packet[14] = 0xC0; packet[15] = 0x00;
+
+    // ARP type
+    packet[16] = 0x08; packet[17] = 0x06;
 
     // ARP Header
-    packet[14] = 0x00; packet[15] = 0x01; // Hardware: Ethernet
-    packet[16] = 0x08; packet[17] = 0x00; // Protocol: IPv4
-    packet[18] = 0x06;                    // Hardware Size
-    packet[19] = 0x04;                    // Protocol Size
-    packet[20] = 0x00; packet[21] = 0x02; // Opcode: Reply
+    packet[18] = 0x00; packet[19] = 0x01; // Hardware: Ethernet
+    packet[20] = 0x08; packet[21] = 0x00; // Protocol: IPv4
+    packet[22] = 0x06;                    // Hardware Size
+    packet[23] = 0x04;                    // Protocol Size
+    packet[24] = 0x00; packet[25] = 0x02; // Opcode: Reply
 
     // Sender MAC/IP (Master)
-    memcpy(packet + 22, m_sourceMac, 6);
-    packet[28] = 192; packet[29] = 168; packet[30] = 0; packet[31] = 254;
+    memcpy(packet + 26, m_sourceMac, 6);
+    packet[32] = 192; packet[33] = 168; packet[34] = 0; packet[35] = 254;
 
     // Target MAC/IP (Slave)
-    memcpy(packet + 32, targetMac, 6);
-    memcpy(packet + 38, targetIp, 4);
+    memcpy(packet + 36, targetMac, 6);
+    memcpy(packet + 42, targetIp, 4);
 
-    if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, sizeof(packet)) != 0) return false;
-    emit messageLogged(QString("  [ARP Reply Out] To Slave for 192.168.0.254"));
+    if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 64) != 0) return false;
+    emit messageLogged(QString("  [ARP Reply Out] To Slave for 192.168.0.254 (VLAN Tagged)"));
     return true;
 }
+
 
 } // namespace PNConfigLib
