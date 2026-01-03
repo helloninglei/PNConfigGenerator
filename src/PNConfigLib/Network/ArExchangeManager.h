@@ -80,6 +80,7 @@ private:
     QTimer *m_cyclicTimer;
     int m_phaseStep = 0;
     uint32_t m_lastXid = 0;
+    int m_consecutiveTimeouts = 0;
     bool m_inPhaseTick = false;
     bool m_isDestroying = false;
 };

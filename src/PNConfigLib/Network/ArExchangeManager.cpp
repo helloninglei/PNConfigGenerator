@@ -213,9 +213,27 @@ void ArExchangeManager::onPhaseTimerTick() {
             break;
             
         case ArState::Running:
-            waitForResponse(0x8001, 0, 1); 
-            if (!safeThis) return;
-            m_phaseTimer->start(10); 
+            {
+                int res = waitForResponse(0x8001, 0, 5); // Poll for Input Data
+                if (!safeThis) return;
+                
+                if (res == 0) {
+                    m_consecutiveTimeouts = 0;
+                } else if (res == -2) { // Timeout
+                    m_consecutiveTimeouts++;
+                    if (m_consecutiveTimeouts > 100) { // ~1 second of silence (since we tick every 10ms)
+                        emit messageLogged("Error: Cyclic data exchange timeout. Connection lost.");
+                        m_lastError = "Cyclic timeout (Slave stopped sending RT frames)";
+                        stop();
+                        return;
+                    }
+                } else if (res < 0) { // Fault or other error
+                    emit messageLogged(QString("Error: Cyclic exchange failed with code: %1").arg(res));
+                    stop();
+                    return;
+                }
+                m_phaseTimer->start(10); 
+            }
             break;
             
         default:
@@ -533,6 +551,7 @@ uint16_t ArExchangeManager::calculateIpChecksum(const uint8_t* ipHeader, int len
 void ArExchangeManager::sendCyclicFrame() {
     if (!m_pcapHandle) return;
 
+    // Standard untagged RT frame: Eth (14) + FrameID (2) + Data (1) + IOPS (1) + IOCS (1) + APDU (4) = 23 bytes
     uint8_t packet[64];
     memset(packet, 0, sizeof(packet));
 
@@ -541,34 +560,29 @@ void ArExchangeManager::sendCyclicFrame() {
     if (macParts.size() == 6) for (int i = 0; i < 6; ++i) packet[i] = (uint8_t)macParts[i].toInt(nullptr, 16);
     memcpy(packet + 6, m_sourceMac, 6);
     
-    // VLAN Tag (802.1Q) - Priority 6, VLAN 0
-    packet[12] = 0x81; packet[13] = 0x00;
-    packet[14] = 0xC0; packet[15] = 0x00;
+    // Ethertype 0x8892 (PROFINET RT - untagged)
+    packet[12] = 0x88; packet[13] = 0x92;
 
-    // Ethertype 0x8892
-    packet[16] = 0x88; packet[17] = 0x92;
+    // PROFINET RT Header (FrameID 0x8002 for Master Output to Slave)
+    packet[14] = 0x80; packet[15] = 0x02;
 
-    // PROFINET RT Header (FrameID 0x8002 for Master Output)
-    packet[18] = 0x80; packet[19] = 0x02;
+    // IO Data (1 byte output data + 1 byte IOPS for output)
+    packet[16] = m_outputData; // Output data to slave
+    packet[17] = 0x80; // IOPS Good
 
-    // IO Data Object 1 (1 byte data + 1 byte IOPS)
-    packet[20] = m_outputData; // Data from UI
-    packet[21] = 0x80; // IOPS Good
-    
-    // IOCS for Slave Input (1 byte)
-    packet[22] = 0x80; // IOCS Good
+    // IOCS (1 byte - consumer status for the input data we expect from slave)
+    packet[18] = 0x80; // IOCS Good
 
-    // Moving APDU Status to the end of the 64-byte frame (Offset 60)
-    // p-net and other stacks typically look at the end of the frame if it is padded to 64 bytes.
+    // APDU Status (4 bytes) immediately following IO data
     static uint16_t cycleCounter = 0;
-    packet[60] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
-    packet[61] = cycleCounter & 0xFF;        // CycleCounter Low
+    packet[19] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
+    packet[20] = cycleCounter & 0xFF;        // CycleCounter Low
     cycleCounter += 256;
 
-    packet[62] = 0x35; // Data Status (Valid, Run, NoProblem, Primary)
-    packet[63] = 0x00; // Transfer Status
+    packet[21] = 0x35; // Data Status (Valid=1, Run=1, Primary=1)
+    packet[22] = 0x00; // Transfer Status
 
-    // Send full 64-byte frame
+    // Send full 64-byte frame (padded with zeros for minimum Ethernet frame size)
     pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 64);
 }
 
