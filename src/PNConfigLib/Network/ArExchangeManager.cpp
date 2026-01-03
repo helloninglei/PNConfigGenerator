@@ -582,6 +582,13 @@ void ArExchangeManager::sendCyclicFrame() {
     packet[21] = 0x35; // Data Status (Valid=1, Run=1, Primary=1)
     packet[22] = 0x00; // Transfer Status
 
+    // Log first few transmissions
+    static int logCounter = 0;
+    if (logCounter++ < 5) {
+        emit messageLogged(QString("  [Sending Cyclic] FrameID: 0x8002, Data: 0x%1, IOPS: 0x80, IOCS: 0x80")
+            .arg(m_outputData, 2, 16, QChar('0')));
+    }
+
     // Send full 64-byte frame (padded with zeros for minimum Ethernet frame size)
     pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 64);
 }
