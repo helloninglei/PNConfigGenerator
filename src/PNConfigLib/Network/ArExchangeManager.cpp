@@ -214,14 +214,16 @@ void ArExchangeManager::onPhaseTimerTick() {
             
         case ArState::Running:
             {
-                int res = waitForResponse(0x8001, 0, 5); // Poll for Input Data
+                // Poll for Input Data from Slave (using FrameID 0x8001)
+                // In simulation, we need a larger timeout for the poll to handle jitter
+                int res = waitForResponse(0x8001, 0, 20); 
                 if (!safeThis) return;
                 
                 if (res == 0) {
                     m_consecutiveTimeouts = 0;
                 } else if (res == -2) { // Timeout
                     m_consecutiveTimeouts++;
-                    if (m_consecutiveTimeouts > 100) { // ~1 second of silence (since we tick every 10ms)
+                    if (m_consecutiveTimeouts > 500) { // Tolerance for jitter (approx 5 seconds)
                         emit messageLogged("Error: Cyclic data exchange timeout. Connection lost.");
                         m_lastError = "Cyclic timeout (Slave stopped sending RT frames)";
                         stop();
@@ -342,7 +344,7 @@ bool ArExchangeManager::sendRpcConnect() {
         body[offset++] = 0x00; body[offset++] = (i == 0 ? 0x01 : 0x02); // Ref
         body[offset++] = 0x88; body[offset++] = 0x92; // LT
         body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x02; // Props (RT_CLASS_2)
-        body[offset++] = 0x00; body[offset++] = 0x03; // DataLen 3 (1 data + 1 IOPS + 1 IOCS)
+        body[offset++] = 0x00; body[offset++] = 0x24; // DataLen 36 (to fit 60-byte tagged frame: 14+4+2+36+4=60)
         body[offset++] = 0x80; body[offset++] = (i == 0 ? 0x01 : 0x02); // FrameID
         body[offset++] = 0x00; body[offset++] = 0x10; // Clock
         body[offset++] = 0x00; body[offset++] = 0x10; // RR
@@ -551,8 +553,9 @@ uint16_t ArExchangeManager::calculateIpChecksum(const uint8_t* ipHeader, int len
 void ArExchangeManager::sendCyclicFrame() {
     if (!m_pcapHandle) return;
 
-    // Standard untagged RT frame: Eth (14) + FrameID (2) + Data (1) + IOPS (1) + IOCS (1) + APDU (4) = 23 bytes
-    uint8_t packet[64];
+    // Send Tagged RT frame (60 bytes total):
+    // Eth(14) + Tag(4) + ID(2) + DataBlock(36) + APDU(4) = 60 bytes
+    uint8_t packet[60];
     memset(packet, 0, sizeof(packet));
 
     // Ethernet Header
@@ -560,254 +563,143 @@ void ArExchangeManager::sendCyclicFrame() {
     if (macParts.size() == 6) for (int i = 0; i < 6; ++i) packet[i] = (uint8_t)macParts[i].toInt(nullptr, 16);
     memcpy(packet + 6, m_sourceMac, 6);
     
-    // Ethertype 0x8892 (PROFINET RT - untagged)
-    packet[12] = 0x88; packet[13] = 0x92;
+    // VLAN Tag (802.1Q)
+    packet[12] = 0x81; packet[13] = 0x00; // TPID
+    packet[14] = 0xC0; packet[15] = 0x00; // TCI (Priority 6, VLAN 0)
 
-    // PROFINET RT Header (FrameID 0x8002 for Master Output to Slave)
-    packet[14] = 0x80; packet[15] = 0x02;
+    // Ethertype 0x8892 (PROFINET RT)
+    packet[16] = 0x88; packet[17] = 0x92;
 
-    // IO Data (1 byte output data + 1 byte IOPS for output)
-    packet[16] = m_outputData; // Output data to slave
-    packet[17] = 0x80; // IOPS Good
+    // PROFINET RT Header (FrameID 0x8002)
+    packet[18] = 0x80; packet[19] = 0x02;
 
-    // IOCS (1 byte - consumer status for the input data we expect from slave)
-    packet[18] = 0x80; // IOCS Good
+    // IO Data (1 byte output data + 1 byte IOPS + 1 byte IOCS)
+    packet[20] = m_outputData;
+    packet[21] = 0x80; // IOPS Good
+    packet[22] = 0x80; // IOCS Good
 
-    // APDU Status (4 bytes) immediately following IO data
+    // APDU Status must be at the VERY END of the 60-byte frame (bytes 56-59)
     static uint16_t cycleCounter = 0;
-    packet[19] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
-    packet[20] = cycleCounter & 0xFF;        // CycleCounter Low
+    packet[56] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
+    packet[57] = cycleCounter & 0xFF;        // CycleCounter Low
     cycleCounter += 256;
 
-    packet[21] = 0x35; // Data Status (Valid=1, Run=1, Primary=1)
-    packet[22] = 0x00; // Transfer Status
+    packet[58] = 0x35; // Data Status (Valid=1, Run=1, Primary=1)
+    packet[59] = 0x00; // Transfer Status
 
-    // Log first few transmissions
+    // Log transmissions
     static int logCounter = 0;
     if (logCounter++ < 5) {
-        emit messageLogged(QString("  [Sending Cyclic] FrameID: 0x8002, Data: 0x%1, IOPS: 0x80, IOCS: 0x80")
+        emit messageLogged(QString("  [Sending Cyclic] FrameID: 0x8002, Data: 0x%1, Status: 0x35 (Tagged 60B)")
             .arg(m_outputData, 2, 16, QChar('0')));
     }
 
-    // Send full 64-byte frame (padded with zeros for minimum Ethernet frame size)
-    pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 64);
+    pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 60);
 }
 
 void ArExchangeManager::startCyclicExchange() {
-
     if (m_cyclicTimer->isActive()) return;
-    
     // Start periodic timer at 8ms (matching Clock 16 / RR 16)
     m_cyclicTimer->start(8);
 }
 
 int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeoutMs) {
-
     if (!m_pcapHandle) return -1;
-
     struct pcap_pkthdr *header;
     const uint8_t *data;
     QElapsedTimer timer;
     timer.start();
-
     QPointer<ArExchangeManager> safeThis(this);
     while (timer.elapsed() < timeoutMs) {
         if (!m_pcapHandle) return -1;
         int res = pcap_next_ex((pcap_t*)m_pcapHandle, &header, &data);
         if (!safeThis) return -1;
-        if (!m_pcapHandle) return -1;
-
         if (res == 1) {
             if (header->caplen < 14) continue;
-
             const uint8_t *dest = data;
             const uint8_t *src = data + 6;
             uint16_t type = (data[12] << 8) | data[13];
             int ethHeaderLen = 14;
-
-            // Handle VLAN tag (802.1Q)
             if (type == 0x8100 && header->caplen >= 18) {
                 type = (data[16] << 8) | data[17];
                 ethHeaderLen = 18;
             }
-
-            // MATCH ALL PACKETS FROM TARGET FOR LOGGING
             if (memcmp(src, m_targetMacBytes, 6) == 0) {
-                if (type == 0x0806 && header->caplen >= ethHeaderLen + 28) { // ARP
+                if (type == 0x0806 && header->caplen >= ethHeaderLen + 28) { 
                     const uint8_t *arp = data + ethHeaderLen;
-                    uint16_t op = (arp[6] << 8 | arp[7]);
-                    if (op == 1) { // Request
-                        if (arp[24] == 192 && arp[25] == 168 && arp[26] == 0 && arp[27] == 254) {
-                            sendArpResponse(src, arp + 14); 
-                        }
+                    if ((arp[6] << 8 | arp[7]) == 1) {
+                        if (arp[24] == 192 && arp[25] == 168 && arp[26] == 0 && arp[27] == 254) sendArpResponse(src, arp + 14); 
                     }
                 }
-                // Avoid logging cyclic frames too often
                 static int packetCounter = 0;
-                if (type != 0x8892 || packetCounter++ % 100 == 0) {
-                    emit messageLogged(QString("  [Packet from Target] Dest: %1 Type: 0x%2")
-                        .arg(macToString(dest)).arg(type, 4, 16, QChar('0')));
+                if (type != 0x8892 || packetCounter++ % 200 == 0) {
+                     emit messageLogged(QString("  [Packet from Slave] Type: 0x%1 Dest: %2").arg(type, 4, 16, QChar('0')).arg(macToString(dest)));
                 }
             }
-
-            // Match based on destination MAC being US
             if (memcmp(dest, m_sourceMac, 6) != 0) continue;
-
             if (type == 0x8892 && frameId != 0xFEFD) { 
                 if (header->caplen >= ethHeaderLen + 2) {
                     uint16_t capturedFrameId = (data[ethHeaderLen] << 8) | data[ethHeaderLen + 1];
-                    if (capturedFrameId == frameId) return 0;
-                    
                     if (capturedFrameId == 0x8001 && header->caplen >= ethHeaderLen + 4) { 
                         uint8_t newVal = data[ethHeaderLen + 2];
-                        if (newVal != m_inputData) {
-                            m_inputData = newVal;
-                            emit inputDataReceived(m_inputData);
-                        }
-                        
-                        // Log DataStatus and other info occasionally
+                        if (newVal != m_inputData) { m_inputData = newVal; emit inputDataReceived(m_inputData); }
+                        uint8_t ds = (header->caplen >= 4) ? data[header->caplen - 2] : 0;
                         static int logCounterIO = 0;
-                        if (logCounterIO++ % 100 == 0) {
-                             uint8_t ds = (header->caplen >= ethHeaderLen + 5 + 1) ? data[ethHeaderLen + 5] : 0;
-                             emit messageLogged(QString("  [PN Packet Captured] FrameID: 0x8001 Input: 0x%1 DS: 0x%2")
-                                .arg(newVal, 2, 16, QChar('0')).arg(ds, 2, 16, QChar('0')));
+                        if (logCounterIO++ % 200 == 0) {
+                             emit messageLogged(QString("  [PN Packet Captured] FrameID: 0x8001 Input: 0x%1 DS: 0x%2 Len: %3").arg(newVal, 2, 16, QChar('0')).arg(ds, 2, 16, QChar('0')).arg(header->caplen));
                         }
                     }
+                    if (capturedFrameId == frameId) return 0;
                 }
-
-            } else if (type == 0x0800) { // IP/RPC
-                if (frameId == 0x0000 || frameId == 0x0001) { // Looking for RPC response
-                    if (header->caplen >= ethHeaderLen + 30) { 
+            } else if (type == 0x0800) { 
+                if (frameId == 0x0000 || frameId == 0x0001) { 
+                    if (header->caplen >= ethHeaderLen + 20 + 8 + 80) { 
                         const uint8_t *ip = data + ethHeaderLen;
-                        if (ip[9] == 0x11) { // UDP
+                        if (ip[9] == 0x11) { 
                             const uint8_t *rpc = ip + 28; 
-                            if (header->caplen >= ethHeaderLen + 20 + 8 + 80) { 
-                                uint8_t pduType = rpc[1]; 
-                                if (pduType == 2) { // Response
-                                    const uint8_t *body = rpc + 80;
-                                    uint32_t retVal = (uint32_t(body[0]) << 24) | (uint32_t(body[1]) << 16) | (uint32_t(body[2]) << 8) | uint32_t(body[3]);
-                                    emit messageLogged(QString("  [RPC Response] Return Value: 0x%1").arg(retVal, 8, 16, QChar('0')));
-                                    if (retVal == 0 || retVal < 0xFF) return (int)retVal; 
-                                } else if (pduType == 3) {
-                                    emit messageLogged("  [RPC Fault] DCE RPC Fault received.");
-                                    return -4;
-                                }
+                            if (rpc[1] == 2) { 
+                                const uint8_t *body = rpc + 80;
+                                uint32_t retVal = (uint32_t(body[0]) << 24) | (uint32_t(body[1]) << 16) | (uint32_t(body[2]) << 8) | uint32_t(body[3]);
+                                emit messageLogged(QString("  [RPC Response] Return Value: 0x%1").arg(retVal, 8, 16, QChar('0')));
+                                if (retVal == 0 || retVal < 0xFF) return (int)retVal; 
+                            } else if (rpc[1] == 3) {
+                                emit messageLogged("  [RPC Fault] DCE RPC Fault received.");
+                                return -4;
                             }
                         }
                     }
-                } else if (frameId == 0x0002) { // Looking for RPC Request (AppReady)
+                } else if (frameId == 0x0002) { 
                     if (header->caplen >= ethHeaderLen + 20 + 8 + 80) {
                         const uint8_t *ip = data + ethHeaderLen;
                         if (ip[9] == 0x11) {
                             const uint8_t *rpc = ip + 28;
-                            uint8_t pduType = rpc[1];
-                            uint16_t opnum = (rpc[68] << 8) | rpc[69]; 
-                            if (pduType == 0 && opnum == 4) { 
+                            if (rpc[1] == 0 && ((rpc[68] << 8) | rpc[69]) == 4) { 
                                 emit messageLogged("  [RPC Request] Control Request (AppReady) received.");
-                                
-                                // Build complete PROFINET CControl response
-                                uint8_t resp[512];
-                                memset(resp, 0, sizeof(resp));
-                                
-                                // Ethernet Header
-                                memcpy(resp, src, 6);       // Dest
-                                memcpy(resp + 6, dest, 6);  // Source
-                                resp[12] = 0x08; resp[13] = 0x00; // Untagged for RPC response
-                                
-                                // IP Header
-                                uint8_t *r_ip = resp + 14;
-                                memcpy(r_ip, ip, 20); 
-                                memcpy(r_ip + 12, ip + 16, 4);  // Swap IPs
-                                memcpy(r_ip + 16, ip + 12, 4);
-                                
-                                // UDP Header - swap ports
-                                uint8_t *r_udp = resp + 34;
-                                memcpy(r_udp, ip + 22, 2);     // Source port = original dest port
-                                memcpy(r_udp + 2, ip + 20, 2); // Dest port = original source port
-                                
-                                // RPC Header
-                                uint8_t *r_rpc = resp + 42;
-                                memcpy(r_rpc, rpc, 80);
-                                r_rpc[1] = 2; // Response
-                                
-                                // RPC Body - PROFINET Block Structure
-                                uint8_t *r_body = resp + 122;
-                                int bodyPos = 0;
-                                
-                                // PNIOStatus (4 bytes) - Success (0x00000000)
-                                // p-net reads this as the first field of pf_ndr_data_t (args_maximum)
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
-
-                                // NDR Header - remaining 4 fields (16 bytes)
-                                // args_length (4 bytes)
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x20; // 32 bytes of block data
-                                // maximum_count (4 bytes)
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x20;
-                                // offset (4 bytes)
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
-                                // actual_count (4 bytes)
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x20;
-                                
-                                // Block Header (6 bytes) - PF_BT_APPRDY_RES (0x8112)
-                                r_body[bodyPos++] = 0x81; r_body[bodyPos++] = 0x12;  // BlockType (0x8112)
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x1C;  // BlockLength (28 bytes)
-                                r_body[bodyPos++] = 0x01; r_body[bodyPos++] = 0x00;  // BlockVersionHigh (1), BlockVersionLow (0)
-                                
-                                // Control Block Data (26 bytes)
-                                // Reserved (2 bytes)
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
-                                
-                                // AR UUID (16 bytes) - copy from request
-                                // Request structure: RPC(80) + Status(4) + NDR(20) + BlockHeader(6) + Reserved(2) + UUID(16)
-                                if (header->caplen >= ethHeaderLen + 20 + 8 + 80 + 4 + 20 + 6 + 2 + 16) {
-                                    memcpy(r_body + bodyPos, rpc + 80 + 4 + 20 + 6 + 2, 16);
-                                } else {
-                                    memset(r_body + bodyPos, 0, 16);
-                                }
+                                uint8_t resp[512]; memset(resp, 0, sizeof(resp));
+                                memcpy(resp, src, 6); memcpy(resp + 6, dest, 6); resp[12] = 0x08; resp[13] = 0x00; 
+                                uint8_t *r_ip = resp + 14; memcpy(r_ip, ip, 20); memcpy(r_ip + 12, ip + 16, 4); memcpy(r_ip + 16, ip + 12, 4);
+                                uint8_t *r_udp = resp + 34; memcpy(r_udp, ip + 22, 2); memcpy(r_udp + 2, ip + 20, 2); 
+                                uint8_t *r_rpc = resp + 42; memcpy(r_rpc, rpc, 80); r_rpc[1] = 2; 
+                                uint8_t *r_body = resp + 122; int bodyPos = 0;
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x20;
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x20;
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
+                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x20;
+                                r_body[bodyPos++] = 0x81; r_body[bodyPos++] = 0x12; r_body[bodyPos++] = 0; r_body[bodyPos++] = 0x1C; r_body[bodyPos++] = 1; r_body[bodyPos++] = 0;
+                                r_body[bodyPos++] = 0; r_body[bodyPos++] = 0;
+                                if (header->caplen >= ethHeaderLen + 20 + 8 + 80 + 4 + 20 + 6 + 2 + 16) memcpy(r_body + bodyPos, rpc + 80 + 4 + 20 + 6 + 2, 16);
                                 bodyPos += 16;
-                                
-                                // Session Key (2 bytes)
-                                if (header->caplen >= ethHeaderLen + 20 + 8 + 80 + 4 + 20 + 6 + 2 + 16 + 2) {
-                                    memcpy(r_body + bodyPos, rpc + 80 + 4 + 20 + 6 + 2 + 16, 2);
-                                } else {
-                                    r_body[bodyPos] = 0x00; r_body[bodyPos+1] = 0x01;
-                                }
+                                if (header->caplen >= ethHeaderLen + 20 + 8 + 80 + 4 + 20 + 6 + 2 + 16 + 2) memcpy(r_body + bodyPos, rpc + 80 + 4 + 20 + 6 + 2 + 16, 2);
+                                else { r_body[bodyPos] = 0; r_body[bodyPos+1] = 1; }
                                 bodyPos += 2;
-                                
-                                // Alarm Sequence Number (2 bytes)
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
-                                
-                                // Control Command (2 bytes) - BIT(PF_CONTROL_COMMAND_BIT_DONE) = 0x0008
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x08;
-                                
-                                // Control Block Properties (2 bytes)
-                                r_body[bodyPos++] = 0x00; r_body[bodyPos++] = 0x00;
-                                
-                                // Calculate final lengths
-                                uint16_t fragLen = 80 + bodyPos;  // RPC header (80) + body
-                                r_rpc[74] = (fragLen >> 8); r_rpc[75] = (fragLen & 0xFF);
-                                
-                                uint16_t udpLen = 8 + fragLen;
-                                r_udp[4] = (udpLen >> 8); r_udp[5] = (udpLen & 0xFF);
-                                
-                                uint16_t ipLen = 20 + udpLen;
-                                r_ip[2] = (ipLen >> 8); r_ip[3] = (ipLen & 0xFF);
-                                r_ip[10] = 0; r_ip[11] = 0;
-                                uint16_t r_cksum = calculateIpChecksum(r_ip, 20);
-                                r_ip[10] = (r_cksum >> 8); r_ip[11] = (r_cksum & 0xFF);
-                                
-                                int totalLen = 14 + 20 + udpLen;
-                                emit messageLogged(QString("  [Sending CControl Response] Total: %1 bytes, RPC Body: %2 bytes")
-                                    .arg(totalLen).arg(bodyPos));
-                                    
-                                if (m_pcapHandle) {
-                                    pcap_sendpacket((pcap_t*)m_pcapHandle, resp, totalLen);
-                                }
+                                r_body[bodyPos++] = 0; r_body[bodyPos++] = 0; r_body[bodyPos++] = 0; r_body[bodyPos++] = 8; r_body[bodyPos++] = 0; r_body[bodyPos++] = 0;
+                                uint16_t fragLen = 80 + bodyPos; r_rpc[74] = (fragLen >> 8); r_rpc[75] = (fragLen & 0xFF);
+                                uint16_t udpLen = 8 + fragLen; r_udp[4] = (udpLen >> 8); r_udp[5] = (udpLen & 0xFF);
+                                uint16_t ipLen = 20 + udpLen; r_ip[2] = (ipLen >> 8); r_ip[3] = (ipLen & 0xFF);
+                                r_ip[10] = 0; r_ip[11] = 0; uint16_t r_cksum = calculateIpChecksum(r_ip, 20); r_ip[10] = (r_cksum >> 8); r_ip[11] = (r_cksum & 0xFF);
+                                emit messageLogged(QString("  [Sending CControl Response] Total: %1 bytes").arg(14 + ipLen));
+                                if (m_pcapHandle) pcap_sendpacket((pcap_t*)m_pcapHandle, resp, 14 + ipLen);
                                 return 0;
                             }
                         }
@@ -818,52 +710,24 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
         QCoreApplication::processEvents();
         if (!safeThis) return -1;
     }
-    return -2; // Timeout
+    return -2; 
 }
 
 QString ArExchangeManager::macToString(const uint8_t *mac) {
-
-    return QString("%1:%2:%3:%4:%5:%6")
-        .arg(mac[0], 2, 16, QChar('0'))
-        .arg(mac[1], 2, 16, QChar('0'))
-        .arg(mac[2], 2, 16, QChar('0'))
-        .arg(mac[3], 2, 16, QChar('0'))
-        .arg(mac[4], 2, 16, QChar('0'))
-        .arg(mac[5], 2, 16, QChar('0')).toUpper();
+    return QString("%1:%2:%3:%4:%5:%6").arg(mac[0], 2, 16, QChar('0')).arg(mac[1], 2, 16, QChar('0')).arg(mac[2], 2, 16, QChar('0'))
+        .arg(mac[3], 2, 16, QChar('0')).arg(mac[4], 2, 16, QChar('0')).arg(mac[5], 2, 16, QChar('0')).toUpper();
 }
 
 bool ArExchangeManager::sendArpResponse(const uint8_t* targetMac, const uint8_t* targetIp) {
     if (!m_pcapHandle) return false;
-    uint8_t packet[64];
-    memset(packet, 0, sizeof(packet));
-
-    // Ethernet Header
-    memcpy(packet, targetMac, 6);       // Dest MAC
-    memcpy(packet + 6, m_sourceMac, 6); // Source MAC
-    
-    // NO VLAN Tag for ARP - ARP is usually untagged in PROFINET networks
-    // EtherType 0x0806
-    packet[12] = 0x08; packet[13] = 0x06;
-
-    // ARP Header
-    packet[14] = 0x00; packet[15] = 0x01; // Hardware: Ethernet
-    packet[16] = 0x08; packet[17] = 0x00; // Protocol: IPv4
-    packet[18] = 0x06;                    // Hardware Size
-    packet[19] = 0x04;                    // Protocol Size
-    packet[20] = 0x00; packet[21] = 0x02; // Opcode: Reply
-
-    // Sender MAC/IP (Master)
-    memcpy(packet + 22, m_sourceMac, 6);
-    packet[28] = 192; packet[29] = 168; packet[30] = 0; packet[31] = 254;
-
-    // Target MAC/IP (Slave)
-    memcpy(packet + 32, targetMac, 6);
-    memcpy(packet + 38, targetIp, 4);
-
+    uint8_t packet[64]; memset(packet, 0, sizeof(packet));
+    memcpy(packet, targetMac, 6); memcpy(packet + 6, m_sourceMac, 6); packet[12] = 0x08; packet[13] = 0x06;
+    packet[14] = 0; packet[15] = 1; packet[16] = 8; packet[17] = 0; packet[18] = 6; packet[19] = 4; packet[20] = 0; packet[21] = 2;
+    memcpy(packet + 22, m_sourceMac, 6); packet[28] = 192; packet[29] = 168; packet[30] = 0; packet[31] = 254;
+    memcpy(packet + 32, targetMac, 6); memcpy(packet + 38, targetIp, 4);
     if (pcap_sendpacket((pcap_t*)m_pcapHandle, packet, 64) != 0) return false;
     emit messageLogged(QString("  [ARP Reply Out] To Slave for 192.168.0.254 (Untagged)"));
     return true;
 }
-
 
 } // namespace PNConfigLib
