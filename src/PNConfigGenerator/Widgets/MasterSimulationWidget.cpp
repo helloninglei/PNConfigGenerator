@@ -758,9 +758,9 @@ void MasterSimulationWidget::onInsertModule()
 
 void MasterSimulationWidget::showModuleConfig(int slotIndex)
 {
-    // Clear config layout
+    // Clear config layout safely
     while (QLayoutItem* item = configLayout->takeAt(0)) {
-        if (item->widget()) delete item->widget();
+        if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
 
@@ -872,9 +872,9 @@ void MasterSimulationWidget::onOutputValueChanged(int value) {
 
 void MasterSimulationWidget::displayDeviceSlots(const PNConfigLib::GsdmlInfo &info)
 {
-    // Clear current slots
+    // Clear current slots safely
     while (QLayoutItem* layoutItem = slotLayout->takeAt(0)) {
-        if (layoutItem->widget()) delete layoutItem->widget();
+        if (layoutItem->widget()) layoutItem->widget()->deleteLater();
         delete layoutItem;
     }
 
@@ -905,11 +905,14 @@ void MasterSimulationWidget::displayDeviceSlots(const PNConfigLib::GsdmlInfo &in
 
 void MasterSimulationWidget::showBasicConfig(const PNConfigLib::GsdmlInfo &info, QTreeWidgetItem *item)
 {
-    // Clear config layout
+    // Clear config layout safely
     while (QLayoutItem* layoutItem = configLayout->takeAt(0)) {
-        if (layoutItem->widget()) delete layoutItem->widget();
+        if (layoutItem->widget()) layoutItem->widget()->deleteLater();
         delete layoutItem;
     }
+
+    m_inputLabels.clear();
+    m_outputSpinBoxes.clear();
 
     // 1. Station Name Group
     QGroupBox *nameGroup = new QGroupBox("站名称", this);
