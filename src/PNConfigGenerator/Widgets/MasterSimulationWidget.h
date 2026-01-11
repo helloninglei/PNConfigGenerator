@@ -81,6 +81,7 @@ private:
     void updateDeviceDetail(const PNConfigLib::GsdmlInfo &info);
     void displayDeviceSlots(const PNConfigLib::GsdmlInfo &info);
     void showBasicConfig(const PNConfigLib::GsdmlInfo &info, QTreeWidgetItem *item = nullptr);
+    void clearConfigArea();
 
     enum TreeItemRoles {
         RoleGsdmlIndex = Qt::UserRole,

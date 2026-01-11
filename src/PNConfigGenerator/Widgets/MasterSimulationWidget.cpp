@@ -758,14 +758,7 @@ void MasterSimulationWidget::onInsertModule()
 
 void MasterSimulationWidget::showModuleConfig(int slotIndex)
 {
-    // Clear config layout safely
-    while (QLayoutItem* item = configLayout->takeAt(0)) {
-        if (item->widget()) item->widget()->deleteLater();
-        delete item;
-    }
-
-    m_inputLabels.clear();
-    m_outputSpinBoxes.clear();
+    clearConfigArea();
 
     if (!m_assignedModules.contains(slotIndex)) {
         configLayout->addWidget(new QLabel("Slot(" + QString::number(slotIndex) + ") - 未插入模块"));
@@ -905,14 +898,7 @@ void MasterSimulationWidget::displayDeviceSlots(const PNConfigLib::GsdmlInfo &in
 
 void MasterSimulationWidget::showBasicConfig(const PNConfigLib::GsdmlInfo &info, QTreeWidgetItem *item)
 {
-    // Clear config layout safely
-    while (QLayoutItem* layoutItem = configLayout->takeAt(0)) {
-        if (layoutItem->widget()) layoutItem->widget()->deleteLater();
-        delete layoutItem;
-    }
-
-    m_inputLabels.clear();
-    m_outputSpinBoxes.clear();
+    clearConfigArea();
 
     // 1. Station Name Group
     QGroupBox *nameGroup = new QGroupBox("站名称", this);
@@ -1163,6 +1149,27 @@ void MasterSimulationWidget::updateDeviceDetail(const PNConfigLib::GsdmlInfo &in
     }
     
     catalogDetailLayout->addStretch();
+}
+
+void MasterSimulationWidget::clearConfigArea()
+{
+    while (QLayoutItem* item = configLayout->takeAt(0)) {
+        if (item->widget()) {
+            QWidget* w = item->widget();
+            w->deleteLater();
+        }
+        delete item;
+    }
+
+    editProjectName = nullptr;
+    editProjectIp = nullptr;
+    editProjectMask = nullptr;
+    editProjectGw = nullptr;
+    comboProjectIoCycle = nullptr;
+    editProjectWatchdog = nullptr;
+    
+    m_inputLabels.clear();
+    m_outputSpinBoxes.clear();
 }
 
 void MasterSimulationWidget::onImportGsdml()
@@ -1565,13 +1572,23 @@ void MasterSimulationWidget::onStartCommunication()
     QString ip;
     QString stationName;
     QString nic = nicComboBox->currentData().toString();
+    QTreeWidgetItem *pItem = projectTree->currentItem();
 
     // Priority 1: Use project configuration if a station is selected
-    if (editProjectName && !editProjectName->text().isEmpty()) {
-        stationName = editProjectName->text().trimmed();
-        ip = editProjectIp->text().trimmed();
+    if (pItem && pItem->parent() == stationsItem) {
+        stationName = pItem->text(0);
+        ip = pItem->data(0, RoleIpAddress).toString();
         
-        qDebug() << "Attempting to start AR based on project config. Station Name:" << stationName << "Target IP:" << ip;
+        // If widgets currently exist (viewing Slot 0), take latest unsaved values
+        if (editProjectName) stationName = editProjectName->text().trimmed();
+        if (editProjectIp) ip = editProjectIp->text().trimmed();
+        
+        if (stationName.isEmpty()) {
+             QMessageBox::warning(this, "启动错误", "请先配置站名称。");
+             return;
+        }
+
+        qDebug() << "Attempting to start AR based on project config. Name:" << stationName << "Target IP:" << ip;
         
         // Resolve MAC from online list by matching Station Name
         bool found = false;
@@ -1579,7 +1596,6 @@ void MasterSimulationWidget::onStartCommunication()
             if (device.deviceName == stationName) {
                 mac = device.macAddress;
                 found = true;
-                qDebug() << "Matching online device found! MAC:" << mac;
                 break;
             }
         }
@@ -1587,10 +1603,9 @@ void MasterSimulationWidget::onStartCommunication()
         if (!found) {
             // Fallback: match by IP
             for (const auto &device : m_onlineDevices) {
-                if (device.ipAddress == ip) {
+                if (device.ipAddress == ip && !ip.isEmpty() && ip != "0.0.0.0") {
                     mac = device.macAddress;
                     found = true;
-                    qDebug() << "Matching online device found by IP! MAC:" << mac;
                     break;
                 }
             }
@@ -1598,7 +1613,7 @@ void MasterSimulationWidget::onStartCommunication()
         
         if (!found) {
             QMessageBox::warning(this, "启动错误", 
-                QString("无法在网络上找到站名称为 '%1' 或 IP 为 '%2' 的在线设备。请先确保设备已连接并已扫描。")
+                QString("无法在网络上找到站名称为 '%1' 或 IP 为 '%2' 的在线设备。请先确保设备已连接并在 '在线' 标签中可见。")
                 .arg(stationName, ip));
             return;
         }
