@@ -344,10 +344,10 @@ bool ArExchangeManager::sendRpcConnect() {
         body[offset++] = 0x00; body[offset++] = (i == 0 ? 0x01 : 0x02); // Ref
         body[offset++] = 0x88; body[offset++] = 0x92; // LT
         body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x02; // Props (RT_CLASS_2)
-        body[offset++] = 0x00; body[offset++] = 0x24; // DataLen 36 (to fit 60-byte tagged frame: 14+4+2+36+4=60)
+        body[offset++] = 0x00; body[offset++] = 0x28; // DataLen 40 (Eth 14 + ID 2 + Data 40 + APDU 4 = 60 bytes)
         body[offset++] = 0x80; body[offset++] = (i == 0 ? 0x01 : 0x02); // FrameID
         body[offset++] = 0x00; body[offset++] = 0x10; // Clock
-        body[offset++] = 0x00; body[offset++] = 0x10; // RR
+        body[offset++] = 0x00; body[offset++] = 0x80; // RR (128 -> 128 * 0.5ms = 64ms)
         body[offset++] = 0x00; body[offset++] = 0x01; // Phase
         body[offset++] = 0x00; body[offset++] = 0x00; // Sequence
         body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // Offset
@@ -358,11 +358,11 @@ bool ArExchangeManager::sendRpcConnect() {
         body[offset++] = 0x00; body[offset++] = 0x01; // NbrAPIs
         body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API 0
         body[offset++] = 0x00; body[offset++] = 0x01; // NbrIOData
-        body[offset++] = 0x00; body[offset++] = 0x02; // Slot 2
+        body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
         body[offset++] = 0x00; body[offset++] = 0x01; // Subslot 1
         body[offset++] = 0x00; body[offset++] = 0x00; // FrameOffset 0
         body[offset++] = 0x00; body[offset++] = 0x01; // NbrIOCS
-        body[offset++] = 0x00; body[offset++] = 0x02; // Slot 2
+        body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
         body[offset++] = 0x00; body[offset++] = 0x01; // Subslot 1
         body[offset++] = 0x00; body[offset++] = 0x02; // FrameOffset 2 (Data 1 + IOPS 1)
         uint16_t bLen = (uint16_t)(offset - bLenPos - 2);
@@ -389,7 +389,7 @@ bool ArExchangeManager::sendRpcConnect() {
     body[offset++] = 0x01; body[offset++] = 0x00; // Version
     body[offset++] = 0x00; body[offset++] = 0x01; // NbrAPIs
     body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; // API 0
-    body[offset++] = 0x00; body[offset++] = 0x02; // Slot 2
+    body[offset++] = 0x00; body[offset++] = 0x01; // Slot 1
     body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x00; body[offset++] = 0x32; // Ident 0x32 (Digital IO)
     body[offset++] = 0x00; body[offset++] = 0x00; // ModuleProps 0
     body[offset++] = 0x00; body[offset++] = 0x01; // NbrSubmodules 1
@@ -553,8 +553,8 @@ uint16_t ArExchangeManager::calculateIpChecksum(const uint8_t* ipHeader, int len
 void ArExchangeManager::sendCyclicFrame() {
     if (!m_pcapHandle) return;
 
-    // Send Tagged RT frame (60 bytes total):
-    // Eth(14) + Tag(4) + ID(2) + DataBlock(36) + APDU(4) = 60 bytes
+    // Send Untagged RT frame (60 bytes minimum):
+    // Eth(14) + ID(2) + DataBlock(3) + ... + APDU(4)
     uint8_t packet[60];
     memset(packet, 0, sizeof(packet));
 
@@ -563,34 +563,31 @@ void ArExchangeManager::sendCyclicFrame() {
     if (macParts.size() == 6) for (int i = 0; i < 6; ++i) packet[i] = (uint8_t)macParts[i].toInt(nullptr, 16);
     memcpy(packet + 6, m_sourceMac, 6);
     
-    // VLAN Tag (802.1Q)
-    packet[12] = 0x81; packet[13] = 0x00; // TPID
-    packet[14] = 0xC0; packet[15] = 0x00; // TCI (Priority 6, VLAN 0)
-
-    // Ethertype 0x8892 (PROFINET RT)
-    packet[16] = 0x88; packet[17] = 0x92;
+    // Ethertype 0x8892 (PROFINET RT) - Untagged starts at byte 12
+    packet[12] = 0x88; packet[13] = 0x92;
 
     // PROFINET RT Header (FrameID 0x8002)
-    packet[18] = 0x80; packet[19] = 0x02;
+    packet[14] = 0x80; packet[15] = 0x02;
 
     // IO Data (1 byte output data + 1 byte IOPS + 1 byte IOCS)
-    packet[20] = m_outputData;
-    packet[21] = 0x80; // IOPS Good
-    packet[22] = 0x80; // IOCS Good
+    packet[16] = m_outputData;
+    packet[17] = 0x80; // IOPS Good
+    packet[18] = 0x80; // IOCS Good
 
     // APDU Status must be at the VERY END of the 60-byte frame (bytes 56-59)
+    // because DataLen is 40: Eth(14) + ID(2) + Data(40) + APDU(4) = 60
     static uint16_t cycleCounter = 0;
     packet[56] = (cycleCounter >> 8) & 0xFF; // CycleCounter High
     packet[57] = cycleCounter & 0xFF;        // CycleCounter Low
     cycleCounter += 256;
 
-    packet[58] = 0x35; // Data Status (Valid=1, Run=1, Primary=1)
+    packet[58] = 0x3D; // Data Status (Valid=1, Run=1, Primary=1, Station OK=1)
     packet[59] = 0x00; // Transfer Status
 
     // Log transmissions
     static int logCounter = 0;
     if (logCounter++ < 5) {
-        emit messageLogged(QString("  [Sending Cyclic] FrameID: 0x8002, Data: 0x%1, Status: 0x35 (Tagged 60B)")
+        emit messageLogged(QString("  [Sending Cyclic] FrameID: 0x8002, Data: 0x%1, Status: 0x3D (Untagged 60B)")
             .arg(m_outputData, 2, 16, QChar('0')));
     }
 
@@ -599,8 +596,8 @@ void ArExchangeManager::sendCyclicFrame() {
 
 void ArExchangeManager::startCyclicExchange() {
     if (m_cyclicTimer->isActive()) return;
-    // Start periodic timer at 8ms (matching Clock 16 / RR 16)
-    m_cyclicTimer->start(8);
+    // Start periodic timer at 64ms (matching Clock 16 / RR 128)
+    m_cyclicTimer->start(64);
 }
 
 int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeoutMs) {
@@ -643,7 +640,7 @@ int ArExchangeManager::waitForResponse(uint16_t frameId, uint32_t xid, int timeo
                     if (capturedFrameId == 0x8001 && header->caplen >= ethHeaderLen + 4) { 
                         uint8_t newVal = data[ethHeaderLen + 2];
                         if (newVal != m_inputData) { m_inputData = newVal; emit inputDataReceived(m_inputData); }
-                        uint8_t ds = (header->caplen >= 4) ? data[header->caplen - 2] : 0;
+                        uint8_t ds = (header->caplen >= 60) ? data[58] : 0; // End of 60-byte frame
                         static int logCounterIO = 0;
                         if (logCounterIO++ % 200 == 0) {
                              emit messageLogged(QString("  [PN Packet Captured] FrameID: 0x8001 Input: 0x%1 DS: 0x%2 Len: %3").arg(newVal, 2, 16, QChar('0')).arg(ds, 2, 16, QChar('0')).arg(header->caplen));
