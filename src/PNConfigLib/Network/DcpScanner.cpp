@@ -11,6 +11,7 @@
 #include <iphlpapi.h>
 #pragma comment(lib, "iphlpapi.lib")
 #endif
+#include <QMap>
 #include "DcpScanner.h"
 
 namespace PNConfigLib {
@@ -32,14 +33,62 @@ QList<InterfaceInfo> DcpScanner::getAvailableInterfaces() {
         return interfaces;
     }
 
+#ifdef Q_OS_WIN
+    // Pre-fetch friendly names from Windows API
+    QMap<QString, QString> friendlyNames;
+    ULONG bufLen = 15000;
+    PIP_ADAPTER_ADDRESSES addresses = (PIP_ADAPTER_ADDRESSES)malloc(bufLen);
+    if (GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, addresses, &bufLen) == ERROR_BUFFER_OVERFLOW) {
+        free(addresses);
+        addresses = (PIP_ADAPTER_ADDRESSES)malloc(bufLen);
+    }
+    if (GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, addresses, &bufLen) == NO_ERROR) {
+        for (PIP_ADAPTER_ADDRESSES curr = addresses; curr; curr = curr->Next) {
+            QString guid = QString::fromLocal8Bit(curr->AdapterName).toUpper();
+            QString friendly = QString::fromWCharArray(curr->FriendlyName);
+            QString description = QString::fromWCharArray(curr->Description);
+            
+            // Filter: Only keep adapters that appear in ipconfig
+            // Skip WAN Miniports, Loopback, Kernel Debugger etc.
+            if (description.contains("WAN Miniport", Qt::CaseInsensitive) || 
+                description.contains("Microsoft Loopback", Qt::CaseInsensitive) ||
+                friendly.contains("Loopback", Qt::CaseInsensitive)) {
+                continue;
+            }
+            
+            friendlyNames[guid] = friendly;
+        }
+    }
+    free(addresses);
+#endif
+
     for (d = alldevs; d; d = d->next) {
         InterfaceInfo info;
-        info.name = QString::fromLocal8Bit(d->name);
-        if (d->description) {
-            info.description = QString::fromLocal8Bit(d->description);
-        } else {
-            info.description = info.name;
+        QString pcapName = QString::fromLocal8Bit(d->name);
+        info.name = pcapName;
+        
+        QString displayName;
+#ifdef Q_OS_WIN
+        // Try to match GUID in pcap name with Windows Friendly Name
+        bool foundFriendly = false;
+        QString pcapUpper = pcapName.toUpper();
+        for (auto it = friendlyNames.begin(); it != friendlyNames.end(); ++it) {
+            // Npcap names are like \Device\NPF_{GUID}
+            if (pcapUpper.contains(it.key())) {
+                displayName = it.value();
+                foundFriendly = true;
+                break;
+            }
         }
+        
+        // If not found in our "ipconfig-friendly" whitelist, skip it
+        if (!foundFriendly) {
+            continue; 
+        }
+#else
+        displayName = d->description ? QString::fromLocal8Bit(d->description) : pcapName;
+#endif
+        info.description = displayName;
         interfaces.append(info);
     }
 
